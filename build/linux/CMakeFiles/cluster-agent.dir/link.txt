@@ -1,0 +1,1 @@
+/usr/bin/cc "CMakeFiles/cluster-agent.dir/src/main.c.o" -o cluster-agent  -Wl,-rpath,/usr/local/lib /usr/local/lib/libzmq.so 
