@@ -1,1 +1,26 @@
 android-ndk-r27/
+
+# Build output
+build/
+out/
+*.o
+*.a
+*.so
+*.dylib
+
+# CMake-generated artifacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+CMakeScripts/
+Testing/
+
+# Cap'n Proto generated files live under ${CMAKE_CURRENT_BINARY_DIR}/gen,
+# which is already covered by the `build/` ignore above.
+
+# Editor / OS junk
+.vscode/
+.idea/
+*.swp
+.DS_Store
