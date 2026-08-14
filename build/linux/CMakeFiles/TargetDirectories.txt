@@ -1,3 +1,0 @@
-/workspaces/Void_OS-Merger/build/linux/CMakeFiles/cluster-agent.dir
-/workspaces/Void_OS-Merger/build/linux/CMakeFiles/edit_cache.dir
-/workspaces/Void_OS-Merger/build/linux/CMakeFiles/rebuild_cache.dir

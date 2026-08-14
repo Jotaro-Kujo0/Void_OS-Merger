@@ -1,25 +1,58 @@
-// common/sys_info.h — discover the hardware capabilities of the device
-// the worker is running on so it can advertise them to the master.
-// TODO: probe and cache:
-//   * CPU cores (online + offline), architecture (x86_64 / aarch64 / armv7),
-//     and a stable feature flag bitmap (AVX2, NEON, AES-NI, ...).
-//   * Total + free RAM in MB (read /proc/meminfo on Linux, sysinfo elsewhere).
-//   * Battery percent + charging state on devices that expose one.
-//   * /sys/class/power_supply AC state for laptops in dock/undocked mode.
-//   * Display presence + resolution (handle detach on hybrids like the
-//     Acer Iconia W510 that can lose the keyboard half).
-//   * Touch input (so the master can route pointer/keyboard events).
-//   * Available network interfaces + link type (wifi / eth / cellular),
-//     so the master can pick the lowest-latency peer for chunk recovery or data movement.
-
 #ifndef VOM_COMMON_SYS_INFO_H
 #define VOM_COMMON_SYS_INFO_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
-// TODO: declare struct vom_worker_capabilities (mirrors the worker capabilities payload in the protocol).
-// TODO: declare vom_sys_info_collect(struct vom_worker_capabilities *out).
-// TODO: declare vom_sys_info_to_capnp(struct vom_worker_capabilities *in,
-//                                     WorkerCapabilities *out_proto).
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define VOM_CPU_FEAT_AVX2    (1 << 0)
+#define VOM_CPU_FEAT_NEON    (1 << 1)
+#define VOM_CPU_FEAT_AES_NI  (1 << 2)
+
+typedef enum {
+    VOM_ARCH_X86_64,
+    VOM_ARCH_AARCH64,
+    VOM_ARCH_ARMV7,
+    VOM_ARCH_UNKNOWN
+} VomCpuArch;
+
+typedef enum {
+    VOM_LINK_ETH,
+    VOM_LINK_WIFI,
+    VOM_LINK_CELLULAR,
+    VOM_LINK_UNKNOWN
+} VomLinkType;
+
+typedef struct {
+    VomCpuArch arch;
+    uint32_t cores_online;
+    uint32_t cores_total;
+    uint32_t feature_bitmap;
+    
+    uint64_t ram_total_mb;
+    uint64_t ram_free_mb;
+    
+    int32_t battery_percent; 
+    bool is_charging;
+    bool is_ac_online;
+    
+    bool display_attached;
+    uint32_t display_width;
+    uint32_t display_height;
+    bool touch_supported;
+    
+    VomLinkType network_link_type;
+    uint64_t network_bandwidth_kbps;
+} vom_worker_capabilities;
+
+bool vom_sys_info_collect(vom_worker_capabilities *out);
+void vom_sys_info_to_capnp(const vom_worker_capabilities *in, void *out_proto_struct_ptr);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* VOM_COMMON_SYS_INFO_H */

@@ -10,8 +10,7 @@
 #include <string.h>
 #include <ctype.h>
 
-//so these are standart values to keep everything neat.
-#define MAX_LİNE_LEN 256
+#define MAX_LINE_LEN 256
 #define MAX_NAME_LEN 64
 #define MAX_VAL_LEN 128
 #define MAX_ITEMS 100
@@ -57,12 +56,12 @@ static void add_entry(vom_config *config, const char *sec, const char *key, cons
     if (config->count >= MAX_ITEMS) return;
 
     strncpy(config->entries[config->count].section, sec, MAX_NAME_LEN - 1);
-    strncpy(config->entries[config->count].key, key, MAX_NAME_LEN -1);
-    strmcpy(config->entries[config->count].value, val, MAX_VAL_LEN - 1);
+    strncpy(config->entries[config->count].key, key, MAX_NAME_LEN - 1);
+    strncpy(config->entries[config->count].value, val, MAX_VAL_LEN - 1);
 
-    config->entries[config->count].section[MAX_NAME_LEN -1] = '\0';
+    config->entries[config->count].section[MAX_NAME_LEN - 1] = '\0';
     config->entries[config->count].key[MAX_NAME_LEN - 1] = '\0';
-    config->entries[config->count].value[MAX_NAME_LEN -1] = '\0';
+    config->entries[config->count].value[MAX_VAL_LEN - 1] = '\0';
 
     config->count++;
 }
@@ -82,10 +81,39 @@ vom_config vom_config_defaults(void) {
 vom_config vom_config_load(const char *filename) {
     vom_config config;
     config.count = 0;
-
     FILE *file = fopen(filename, "r");
     if (!file) {
-        return config; 
-        //return empty if it doesnt find anything (hopefully)
+        return config;
     }
+
+    char line[MAX_LINE_LEN];
+    char current_section[MAX_NAME_LEN] = "";
+
+    while (fgets(line, sizeof(line), file)) {
+        strip_comment(line);
+        char *s = trim_whitespace(line);
+        if (*s == '\0') continue;
+
+        if (s[0] == '[') {
+            char *end = strchr(s, ']');
+            if (end) {
+                *end = '\0';
+                char *sec = trim_whitespace(s + 1);
+                strncpy(current_section, sec, MAX_NAME_LEN - 1);
+                current_section[MAX_NAME_LEN - 1] = '\0';
+            }
+            continue;
+        }
+
+        char *eq = strchr(s, '=');
+        if (!eq) continue;
+
+        *eq = '\0';
+        char *k = trim_whitespace(s);
+        char *v = trim_whitespace(eq + 1);
+        add_entry(&config, current_section, k, v);
+    }
+
+    fclose(file);
+    return config;
 }
