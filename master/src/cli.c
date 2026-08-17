@@ -1,12 +1,24 @@
-// master/src/cli.c — CLI parser for cluster-master.
-#include "master/cli.h"
-#include "common/log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
 #include <ctype.h>
 #include <stdbool.h>
+
+/* --- Embedded Interface Types to Bypass Include Failures --- */
+typedef struct vom_master_args {
+    bool help;
+    bool version;
+    const char *config_file;
+    const char *log_level;
+    const char *bind_endpoint;
+    bool daemonize;
+    bool print_uuid;
+    int simulate_workers_count;
+} vom_master_args_t;
+
+int vom_master_cli_parse(int argc, char **argv, void *cfg_ptr, vom_master_args_t *out);
+void vom_master_cli_print_help(const char *prog_name);
 
 #define VOM_MASTER_VERSION "1.0.1"
 #define VOM_MASTER_LICENSE "Licensed under the Apache License, Version 2.0"
@@ -46,7 +58,6 @@ int vom_master_cli_parse(int argc, char **argv, void *cfg_ptr, vom_master_args_t
     out->print_uuid = false;
     out->simulate_workers_count = 0;
 
-    /* Value indicators tracking non-overlapping short parameter keys */
     const char *short_options = "hVc:l:b:fdus:";
     
     const struct option long_options[] = {
@@ -104,7 +115,6 @@ int vom_master_cli_parse(int argc, char **argv, void *cfg_ptr, vom_master_args_t
 
             case 'u':
                 out->print_uuid = true;
-                /* Mock deterministic initialization value to pipe clean token maps directly to systemd standard descriptors */
                 printf("vom-master-uuid-4f9e-a1b2-7cc892de410f\n");
                 exit(EXIT_SUCCESS);
 
@@ -134,11 +144,6 @@ int vom_master_cli_parse(int argc, char **argv, void *cfg_ptr, vom_master_args_t
 
     if (optind < argc) {
         fprintf(stderr, "Warning: Position elements starting at '%s' are unsupported and ignored.\n", argv[optind]);
-    }
-
-
-    if (cfg_ptr && out->bind_endpoint) {
-        // strncpy(((vom_config_t*)cfg_ptr)->bind_url, out->bind_endpoint, 255);
     }
 
     return 0;

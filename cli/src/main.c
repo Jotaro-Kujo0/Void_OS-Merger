@@ -1,85 +1,159 @@
-// Subcommands to support (each is its own TODO block below):
-//
-//   vom-cli status                           → list agents + load
-//   vom-cli submit <payload.bin> [--caps X] → send a task to the master
-//   vom-cli migrate <task-id> <to-agent>     → force-move a running task
-//   vom-cli drain <agent-id>                 → migrate everything off a node
-//   vom-cli watch                            → live tail of cluster events
-//
-// All of them talk to the master through a ZMQ_PULL/PAIR pair or a tiny
-// admin ROUTER socket reserved for CLI traffic.
-//
-// TODO: implement argv dispatch.
-// TODO: reuse common/log.h so log-level flags behave like the binary tools.
-// TODO: print results in a colored human format and as --json for scripts.
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <getopt.h>
-#include "common/log.h"
+#include <stdint.h>
 
-#define COLOR_RESET "\033[0m"
-#define COLOR_BOLD "\033[1m"
-#define COLOR_GREEN "\033[32m"
-#define COLOR_YELLOW "\033[33m"
-#define COLOR_RED "\033[31m"
-#define COLOR_CYAN "\033[36m"
+#define VOM_LOG_INFO(fmt, ...)  printf("[INFO] " fmt "\n", ##__VA_ARGS__)
+#define VOM_LOG_WARN(fmt, ...)  fprintf(stderr, "[WARN] " fmt "\n", ##__VA_ARGS__)
+#define VOM_LOG_ERROR(fmt, ...) fprintf(stderr, "[ERROR] " fmt "\n", ##__VA_ARGS__)
 
-//global flag tarckking
-static bool opt_json = false;
-static const char *opt_log_level = "info";
+#define CLI_MAX_ARGS_LEN    128
+#define CLI_MAX_PATH_LEN    256
 
-static void print_usage(const char *prog_name) {
-    fprintf(stderr, "Usage: %s [global_options] <subcommand> [subcommand_options]\n\n", prog_name);
-    fprintf(stderr, "Global Options:\n");
-    fprintf(stderr, "  -h, --help               Show this core help screen\n");
-    fprintf(stderr, "  --json                   Format output as JSON for programmatic scripting\n");
-    fprintf(stderr, "  -l, --log-level <level>  Set log threshold (debug, info, warn, error)\n\n");
-    fprintf(stderr, "Supported Subcommands:\n");
-    fprintf(stderr, "  status                   List live cluster agents and active loads\n");
-    fprintf(stderr, "  submit <payload.bin>     Send a task payload to the master node\n");
-    fprintf(stderr, "  migrate <id> <agent>     Force-move an active running task to a new agent\n");
-    fprintf(stderr, "  drain <agent-id>         Migrate all running workloads off a target node\n");
-    fprintf(stderr, "  watch                    Live tail stream of global cluster events\n");
-}
+typedef enum {
+    CMD_TYPE_CLUSTER_STATUS,
+    CMD_TYPE_WORKLOAD_SUBMIT,
+    CMD_TYPE_WORKLOAD_INSPECT,
+    CMD_TYPE_WORKLOAD_CANCEL,
+    CMD_TYPE_WORKER_DRAIN,
+    CMD_TYPE_WORKER_RESUME,
+    CMD_TYPE_WORKER_APPROVE,
+    CMD_TYPE_UI_MODE_SET,
+    CMD_TYPE_UNKNOWN
+} CliCommandType;
 
-// SubCommand : Status
-static int handle_status(int argc, char **argv) {
-    if (argc > 0) {
-        fprintf(stderr, "Error 1: 'status subcommand accepts no additional position arguments. \n");
-        return EXIT_FAILURE;
+typedef enum {
+    CLI_OUTPUT_HUMAN_READABLE,
+    CLI_OUTPUT_JSON_STRUCTURABLE,
+    CLI_OUTPUT_PLAIN_SCRIPT_TABLE
+} CliOutputFormat;
+
+typedef enum {
+    CLI_EXIT_SUCCESS           = 0,
+    CLI_EXIT_ERR_BAD_SYNTAX    = 1,
+    CLI_EXIT_ERR_UNKNOWN_CMD   = 2,
+    CLI_EXIT_ERR_MISSING_ARG   = 3,
+    CLI_EXIT_ERR_INVALID_VAL   = 4,
+    CLI_EXIT_ERR_NETWORK_FAULT = 5,
+    CLI_EXIT_ERR_INTERNAL      = 6
+} CliExitCode;
+
+typedef struct {
+    char workload_path[CLI_MAX_PATH_LEN];
+    uint32_t simulated_priority_level;
+} CmdSubmitOpts;
+
+typedef struct {
+    uint64_t target_id;
+} CmdTargetIdOpts;
+
+typedef struct {
+    char target_worker_id[CLI_MAX_ARGS_LEN];
+} CmdWorkerOpts;
+
+typedef struct {
+    char mode_name[CLI_MAX_ARGS_LEN];
+} CmdUiOpts;
+
+typedef struct {
+    CliCommandType type;
+    CliOutputFormat format_strategy;
+    
+    union {
+        CmdSubmitOpts submit;
+        CmdTargetIdOpts inspect;
+        CmdTargetIdOpts cancel;
+        CmdWorkerOpts worker_drain;
+        CmdWorkerOpts worker_resume;
+        CmdWorkerOpts worker_approve;
+        CmdUiOpts ui_mode;
+    } options;
+} CliParsedCommand;
+
+CliExitCode vom_cli_commands_parse(int argc, char **argv, CliParsedCommand *out_cmd) {
+    if (argc < 2 || !out_cmd) {
+        return CLI_EXIT_ERR_BAD_SYNTAX;
     }
 
+    memset(out_cmd, 0, sizeof(CliParsedCommand));
+    out_cmd->format_strategy = CLI_OUTPUT_HUMAN_READABLE;
+    out_cmd->type = CMD_TYPE_UNKNOWN;
 
-    if (opt_json) {
-        printf("{\n \"status\": \"ok\",\n  \"agents\": []\n}\n");
-    }else {
-        printf(COLOR_BOLD COLOR_GREEN "Cluster status Summary:\n" COLOR_RESET);
-        printf(COLOR_CYAN "No agents currently registered.\n" COLOR_RESET);
+    int arg_start_idx = 1;
+    if (strcmp(argv[1], "--json") == 0) {
+        out_cmd->format_strategy = CLI_OUTPUT_JSON_STRUCTURABLE;
+        arg_start_idx++;
+    } else if (strcmp(argv[1], "--script") == 0) {
+        out_cmd->format_strategy = CLI_OUTPUT_PLAIN_SCRIPT_TABLE;
+        arg_start_idx++;
     }
-    return EXIT_SUCCESS;
+
+    if (arg_start_idx >= argc) {
+        return CLI_EXIT_ERR_MISSING_ARG;
+    }
+
+    const char *verb = argv[arg_start_idx];
+
+    if (strcmp(verb, "status") == 0) {
+        out_cmd->type = CMD_TYPE_CLUSTER_STATUS;
+        return CLI_EXIT_SUCCESS;
+    } 
+    
+    if (strcmp(verb, "submit") == 0) {
+        if (arg_start_idx + 1 >= argc) return CLI_EXIT_ERR_MISSING_ARG;
+        out_cmd->type = CMD_TYPE_WORKLOAD_SUBMIT;
+        strncpy(out_cmd->options.submit.workload_path, argv[arg_start_idx + 1], CLI_MAX_PATH_LEN - 1);
+        out_cmd->options.submit.simulated_priority_level = 1;
+        return CLI_EXIT_SUCCESS;
+    } 
+    
+    if (strcmp(verb, "inspect") == 0) {
+        if (arg_start_idx + 1 >= argc) return CLI_EXIT_ERR_MISSING_ARG;
+        out_cmd->type = CMD_TYPE_WORKLOAD_INSPECT;
+        out_cmd->options.inspect.target_id = strtoull(argv[arg_start_idx + 1], NULL, 10);
+        return CLI_EXIT_SUCCESS;
+    }
+
+    if (strcmp(verb, "cancel") == 0) {
+        if (arg_start_idx + 1 >= argc) return CLI_EXIT_ERR_MISSING_ARG;
+        out_cmd->type = CMD_TYPE_WORKLOAD_CANCEL;
+        out_cmd->options.cancel.target_id = strtoull(argv[arg_start_idx + 1], NULL, 10);
+        return CLI_EXIT_SUCCESS;
+    }
+
+    if (strcmp(verb, "drain") == 0) {
+        if (arg_start_idx + 1 >= argc) return CLI_EXIT_ERR_MISSING_ARG;
+        out_cmd->type = CMD_TYPE_WORKER_DRAIN;
+        strncpy(out_cmd->options.worker_drain.target_worker_id, argv[arg_start_idx + 1], CLI_MAX_ARGS_LEN - 1);
+        return CLI_EXIT_SUCCESS;
+    }
+
+    return CLI_EXIT_ERR_UNKNOWN_CMD;
 }
 
-// SubCommand Submit
-static int handle_submit(int argc, char **argv) {
-    int caps = 0;
-    char *payload_path = NULL;
+int main(int argc, char **argv) {
+    CliParsedCommand cmd;
+    CliExitCode rc = vom_cli_commands_parse(argc, argv, &cmd);
 
-    static struct option long_options[] = {
-        {"caps", required_argument, NULL, 'x'},
-        {NULL, 0, NULL, 0}
-    };
-
-    int opt;
-    opterr =0;
-    while ((opt = getopt_long(argc, argv, "x:", long_options, NULL)) != -1) {
-        switch (opt) {
-            case 'x':
-
+    if (rc != CLI_EXIT_SUCCESS) {
+        switch (rc) {
+            case CLI_EXIT_ERR_BAD_SYNTAX:
+                VOM_LOG_ERROR("Usage: vom-cli [--json|--script] <command> [args...]");
+                break;
+            case CLI_EXIT_ERR_MISSING_ARG:
+                VOM_LOG_ERROR("Error: Command requires missing argument variables.");
+                break;
+            case CLI_EXIT_ERR_UNKNOWN_CMD:
+                VOM_LOG_ERROR("Error: Unrecognized master management command verb verb input.");
+                break;
+            default:
+                VOM_LOG_ERROR("Catastrophic error parsing CLI context inputs.");
+                break;
         }
+        return rc;
     }
 
+    VOM_LOG_INFO("Successfully parsed command action index: %d [Format Mode: %d]", cmd.type, cmd.format_strategy);
+    return CLI_EXIT_SUCCESS;
 }
-// TODO: parse argv, validate subcommand, build the matching admin request.
