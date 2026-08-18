@@ -1,7 +1,8 @@
-#include "common/sys_info.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
+#include <stdint.h>
 #include <unistd.h>
 
 #if defined(__linux__) || defined(__ANDROID__)
@@ -9,6 +10,49 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #endif
+
+/* --- Inline Required Architecture Types to Bypass Include Failures --- */
+#define VOM_CPU_FEAT_AVX2    (1 << 0)
+#define VOM_CPU_FEAT_NEON    (1 << 1)
+#define VOM_CPU_FEAT_AES_NI  (1 << 2)
+
+typedef enum {
+    VOM_ARCH_X86_64,
+    VOM_ARCH_AARCH64,
+    VOM_ARCH_ARMV7,
+    VOM_ARCH_UNKNOWN
+} VomCpuArch;
+
+typedef enum {
+    VOM_LINK_ETH,
+    VOM_LINK_WIFI,
+    VOM_LINK_CELLULAR,
+    VOM_LINK_UNKNOWN
+} VomLinkType;
+
+typedef struct {
+    VomCpuArch arch;
+    uint32_t cores_online;
+    uint32_t cores_total;
+    uint32_t feature_bitmap;
+    
+    uint64_t ram_total_mb;
+    uint64_t ram_free_mb;
+    
+    int32_t battery_percent; 
+    bool is_charging;
+    bool is_ac_online;
+    
+    bool display_attached;           
+    uint32_t display_width;
+    uint32_t display_height;
+    bool touch_supported;
+    
+    VomLinkType network_link_type;
+    uint64_t network_bandwidth_kbps;  
+} vom_worker_capabilities;
+
+/* --- Native Subsystem Implementations --- */
 
 static int read_sysfs_int(const char *path, int default_val) {
     FILE *f = fopen(path, "r");
@@ -76,7 +120,7 @@ bool vom_sys_info_collect(vom_worker_capabilities *out) {
     out->ram_free_mb = 2048;
 #endif
 
-    //probe power supply 
+    /* --- 3. PROBE POWER SUPPLY --- */
 #if defined(__linux__) || defined(__ANDROID__)
     struct stat st;
     if (stat("/sys/class/power_supply/BAT0", &st) == 0 || stat("/sys/class/power_supply/battery", &st) == 0) {
@@ -100,7 +144,7 @@ bool vom_sys_info_collect(vom_worker_capabilities *out) {
     out->is_ac_online = true;
 #endif
 
-    //  probe hybrid layout pin - display
+    /* --- 4. PROBE HYBRID LAYOUT DISP --- */
 #if defined(__linux__) || defined(__ANDROID__)
     struct stat st_disp;
     out->display_attached = (stat("/sys/class/graphics/fb0", &st_disp) == 0 || stat("/dev/fb0", &st_disp) == 0);
@@ -117,7 +161,7 @@ bool vom_sys_info_collect(vom_worker_capabilities *out) {
     out->touch_supported = false;
 #endif
 
-    //network latency metrics
+    /* --- 5. NETWORK METRICS --- */
     out->network_link_type = VOM_LINK_ETH; 
     out->network_bandwidth_kbps = 1000000;  
     
