@@ -1,11 +1,31 @@
-// common/src/log.c — leveled logger implementation.
-#include "common/log.h"
+#include <stdio.h>
+#include <stdlib.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <time.h>
 #include <sys/time.h>
 #include <pthread.h>
 #include <string.h>
 
+/* --- Embedded Interface Enums to Bypass Include Path Failures --- */
+typedef enum {
+    VOM_LOG_LEVEL_TRACE = 0,
+    VOM_LOG_LEVEL_DEBUG,
+    VOM_LOG_LEVEL_INFO,
+    VOM_LOG_LEVEL_WARN,
+    VOM_LOG_LEVEL_ERROR,
+    VOM_LOG_LEVEL_FATAL,
+    VOM_LOG_LEVEL_NONE
+} VomLogLevel;
+
+/* --- Core Function Declarations --- */
+void vom_log_set_level(VomLogLevel level);
+void vom_log_set_stream(FILE *stream);
+void vom_log_enable_colors(bool enable);
+bool vom_log_init_postmortem_ring_buffer(const char *file_path, size_t max_file_size_bytes);
+void vom_log_emit(VomLogLevel level, const char *file, int line, const char *fmt, ...);
+
+/* --- Core Logger State Elements --- */
 static VomLogLevel g_current_level = VOM_LOG_LEVEL_INFO;
 static FILE* g_target_stream = NULL;
 static bool g_colors_enabled = true;
@@ -16,12 +36,12 @@ static long g_ring_max_size = 0;
 
 #define ANSI_RESET "\x1b[0m"
 static const char* g_level_colors[] = {
-    "\x1b[35m", // TRACE - Magenta
-    "\x1b[36m", // DEBUG - Cyan 
-    "\x1b[32m", // INFO  - Green
-    "\x1b[33m", // WARN  - Yellow
-    "\x1b[31m", // ERROR - Red
-    "\x1b[41m\x1b[37m" // FATAL - White on Red
+    "\x1b[35m", /* TRACE - Magenta */
+    "\x1b[36m", /* DEBUG - Cyan */
+    "\x1b[32m", /* INFO  - Green */
+    "\x1b[33m", /* WARN  - Yellow */
+    "\x1b[31m", /* ERROR - Red */
+    "\x1b[41m\x1b[37m" /* FATAL - White on Red */
 };
 
 static const char* g_level_tags[] = {
@@ -108,7 +128,7 @@ void vom_log_emit(VomLogLevel level, const char *file, int line, const char *fmt
     if (g_ring_file) {
         meta_len = snprintf(meta_buf, sizeof(meta_buf), "%s.%06d [%s] [%s:%d] ", 
                             time_str, (int)tv.tv_usec, g_level_tags[level], short_file, line);
-        if (meta_len > 0) write_to_ring_buffer(meta_buf, meta_len);
+        if (meta_len > 0) write_to_ring_buffer(meta_buf, (size_t)meta_len);
 
         va_list args2;
         va_start(args2, fmt);
@@ -116,7 +136,7 @@ void vom_log_emit(VomLogLevel level, const char *file, int line, const char *fmt
         va_end(args2);
 
         if (msg_len > 0) {
-            write_to_ring_buffer(msg_buf, msg_len);
+            write_to_ring_buffer(msg_buf, (size_t)msg_len);
             write_to_ring_buffer("\n", 1);
         }
     }

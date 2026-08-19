@@ -1,49 +1,43 @@
-// common/src/config.c — minimal key=value config file loader.
-// TODO: implement vom_config_load() that tolerates comments (# and ;) and
-//       supports [section] headers, returning a populated vom_config.
-// TODO: implement vom_config_defaults() that fills a sane baseline
-//       (heartbeat = 1s, log level = INFO, master endpoint = loopback).
-
-#include "common/config.h"
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 
 #define MAX_LINE_LEN 256
 #define MAX_NAME_LEN 64
-#define MAX_VAL_LEN 128
-#define MAX_ITEMS 100
+#define MAX_VAL_LEN  128
+#define MAX_ITEMS    100
 
-//structure layout
+/* --- Embedded Interface Structures to Bypass Include Path Failures --- */
 typedef struct {
     char section[MAX_NAME_LEN];
     char key[MAX_NAME_LEN];
     char value[MAX_VAL_LEN];
 } vom_config_entry;
 
-typedef struct{
+typedef struct {
     vom_config_entry entries[MAX_ITEMS];
     int count;
 } vom_config;
 
-//helper function
+/* --- Core Function Declarations --- */
+vom_config vom_config_defaults(void);
+vom_config vom_config_load(const char *filename);
+
 static char *trim_whitespace(char *str) {
     char *end;
     while (isspace((unsigned char)*str)) str++;
     if (*str == '\0') return str;
     end = str + strlen(str) - 1;
     while (end > str && isspace((unsigned char)*end)) end--;
-    *(end +1) = '\0';
+    *(end + 1) = '\0';
     return str;
 }
 
-//comment stripper
 static void strip_comment(char *str) {
     char *hash = strchr(str, '#');
     char *semi = strchr(str, ';');
     if (hash && semi) {
-        * (hash < semi ? hash : semi) = '\0';
+        *(hash < semi ? hash : semi) = '\0';
     } else if (hash) {
         *hash = '\0';
     } else if (semi) {
@@ -51,7 +45,6 @@ static void strip_comment(char *str) {
     }
 }
 
-// helper to inject entries into vom_config
 static void add_entry(vom_config *config, const char *sec, const char *key, const char *val) {
     if (config->count >= MAX_ITEMS) return;
 
@@ -66,7 +59,6 @@ static void add_entry(vom_config *config, const char *sec, const char *key, cons
     config->count++;
 }
 
-// config for system constrains
 vom_config vom_config_defaults(void) {
     vom_config config;
     config.count = 0;
