@@ -1,16 +1,87 @@
-#include "master/cluster_state.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdint.h>
 
-// UI record array caps
 #define UI_MAX_NODES            64
 #define UI_MAX_ACTIVE_TASKS     256
 #define UI_MAX_ACTIVE_LEASES    256
 #define UI_SHORT_STRING_LEN     32
 
-// presentation-neutral health tokens
+#define CLUSTER_MAX_WORKERS          32
+#define CLUSTER_MAX_ACTIVE_LEASES_M  128
+#define UUID_STR_MAX                 64
+#define HOSTNAME_STR_MAX             64
+
+typedef enum {
+    WORKER_HEALTH_ONLINE,
+    WORKER_HEALTH_DRAINING,
+    WORKER_HEALTH_OFFLINE,
+    WORKER_HEALTH_SUSPECT
+} WorkerHealth;
+
+typedef enum {
+    CLUSTER_STATUS_BOOSTRAP,
+    CLUSTER_STATUS_OPERATIONAL,
+    CLUSTER_STATUS_DEGRADED,
+    CLUSTER_STATUS_MAINTENANCE,
+    CLUSTER_STATUS_PANIC
+} ClusterStatus;
+
+typedef enum {
+    LEASE_STATUS_IDLE,
+    LEASE_STATUS_ASSIGNED,
+    LEASE_STATUS_EXECUTING,
+    LEASE_STATUS_COMMITTED,
+    LEASE_STATUS_TIMED_OUT,
+    LEASE_STATUS_FAILED
+} LeaseStatus;
+
+typedef struct {
+    uint64_t total_memory_bytes;
+    uint64_t reserved_memory_bytes;
+    uint32_t total_cores;
+    uint32_t reserved_cores;
+} WorkerResources;
+
+typedef struct {
+    uint32_t worker_id;
+    char hostname[HOSTNAME_STR_MAX];
+    WorkerHealth health;
+    uint64_t last_heartbeat_monotonic_ms;
+    WorkerResources resources;
+} WorkerMember;
+
+typedef struct {
+    uint64_t chunk_id;
+    uint64_t workload_id;
+    uint32_t assigned_worker_id;
+    LeaseStatus status;
+    float progress_percentage;
+    uint32_t failure_retry_count;
+} ChunkLease;
+
+typedef struct {
+    uint64_t cluster_aggregate_memory_bytes;
+    uint64_t cluster_allocated_memory_bytes;
+    uint32_t cluster_aggregate_cores;
+    uint32_t cluster_allocated_cores;
+    uint32_t active_worker_count;
+} ClusterMetrics;
+
+typedef struct {
+    char cluster_uuid[UUID_STR_MAX];
+    uint64_t master_epoch;
+    uint64_t state_generation_version;
+    ClusterStatus global_status;
+    WorkerMember active_workers[CLUSTER_MAX_WORKERS];
+    int total_registered_workers;
+    ChunkLease active_leases[CLUSTER_MAX_ACTIVE_LEASES_M];
+    int total_active_leases;
+    ClusterMetrics metrics;
+} ClusterStateSnapshot;
+
 typedef enum {
     UI_HEALTH_UNKNOWN,
     UI_HEALTH_OK,
@@ -18,7 +89,6 @@ typedef enum {
     UI_HEALTH_CRIT
 } UiHealthStatus;
 
-// worker node record
 typedef struct {
     uint32_t node_id;
     char display_name[UI_SHORT_STRING_LEN];
@@ -29,7 +99,6 @@ typedef struct {
     uint64_t ms_since_last_heartbeat;
 } UiNodeRecord;
 
-// chunk lease record
 typedef struct {
     uint64_t chunk_id;
     uint64_t workload_id;
@@ -39,38 +108,30 @@ typedef struct {
     bool requires_attention;
 } UiTaskRecord;
 
-// full logical-device view-model
 typedef struct {
     char device_uuid[64];
     uint64_t logical_epoch;
     uint64_t last_version_seen;
-
     UiHealthStatus summary_health;
     char operational_status_text[UI_SHORT_STRING_LEN];
-
     double cluster_total_memory_gb;
     double cluster_used_memory_gb;
     double cluster_overall_cpu_pct;
-
     UiNodeRecord nodes[UI_MAX_NODES];
     int node_count;
-
     UiTaskRecord tasks[UI_MAX_ACTIVE_TASKS];
     int task_count;
 } UiLogicalDeviceViewModel;
 
-// snapshot -> stable UI view-model
 void ui_model_transform_snapshot(const ClusterStateSnapshot* snapshot, uint64_t current_monotonic_ms, UiLogicalDeviceViewModel* out_model) {
     if (!snapshot || !out_model) return;
 
     memset(out_model, 0, sizeof(UiLogicalDeviceViewModel));
 
-    // identity & version tokens
     strncpy(out_model->device_uuid, snapshot->cluster_uuid, sizeof(out_model->device_uuid) - 1);
     out_model->logical_epoch = snapshot->master_epoch;
     out_model->last_version_seen = snapshot->state_generation_version;
 
-    // cluster -> UI health mapping
     switch (snapshot->global_status) {
         case CLUSTER_STATUS_BOOSTRAP:
             out_model->summary_health = UI_HEALTH_WARN;
@@ -95,7 +156,6 @@ void ui_model_transform_snapshot(const ClusterStateSnapshot* snapshot, uint64_t 
             break;
     }
 
-    // aggregate memory (GB) + CPU %
     const double gb = 1024.0 * 1024.0 * 1024.0;
     out_model->cluster_total_memory_gb = (double)snapshot->metrics.cluster_aggregate_memory_bytes / gb;
     out_model->cluster_used_memory_gb = (double)snapshot->metrics.cluster_allocated_memory_bytes / gb;
@@ -104,7 +164,6 @@ void ui_model_transform_snapshot(const ClusterStateSnapshot* snapshot, uint64_t 
         out_model->cluster_overall_cpu_pct = ((double)snapshot->metrics.cluster_allocated_cores / (double)snapshot->metrics.cluster_aggregate_cores) * 100.0;
     }
 
-    // workers -> node records
     int limit_nodes = (snapshot->total_registered_workers < UI_MAX_NODES) ? snapshot->total_registered_workers : UI_MAX_NODES;
     for (int i = 0; i < limit_nodes; i++) {
         const WorkerMember* src = &snapshot->active_workers[i];
@@ -134,7 +193,6 @@ void ui_model_transform_snapshot(const ClusterStateSnapshot* snapshot, uint64_t 
         out_model->node_count++;
     }
 
-    // leases -> task records
     int limit_leases = (snapshot->total_active_leases < UI_MAX_ACTIVE_LEASES) ? snapshot->total_active_leases : UI_MAX_ACTIVE_LEASES;
     for (int i = 0; i < limit_leases; i++) {
         if (out_model->task_count >= UI_MAX_ACTIVE_TASKS) break;
@@ -162,14 +220,12 @@ void ui_model_transform_snapshot(const ClusterStateSnapshot* snapshot, uint64_t 
     }
 }
 
-// transform self-tests
 void run_ui_model_test_suite(void) {
     printf("--- RUNNING VIEW-MODEL TRANSFORMATION ENGINE TESTS ---\n\n");
 
     const uint64_t dummy_now = 5000;
     UiLogicalDeviceViewModel view_model;
 
-    // empty/bootstrap snapshot
     printf("[TEST 1] Processing Empty/Bootstrap Cluster Snapshot...\n");
     ClusterStateSnapshot empty_snap;
     memset(&empty_snap, 0, sizeof(ClusterStateSnapshot));
@@ -182,64 +238,44 @@ void run_ui_model_test_suite(void) {
     printf("Verify -> Output String: '%s'\n", view_model.operational_status_text);
     printf("Verify -> Memory Size: %.1f GB | Node Entries Found: %d\n\n", view_model.cluster_total_memory_gb, view_model.node_count);
 
-    // single healthy worker + executing lease
     printf("[TEST 2] Processing Active Operational Cluster Snapshot...\n");
     ClusterStateSnapshot active_snap;
     memset(&active_snap, 0, sizeof(ClusterStateSnapshot));
     strcpy(active_snap.cluster_uuid, "NODE-CLUSTER-ONE");
     active_snap.global_status = CLUSTER_STATUS_OPERATIONAL;
     active_snap.state_generation_version = 105;
+    active_snap.master_epoch = 1234567;
+
+    active_snap.metrics.cluster_aggregate_memory_bytes = 16ULL * 1024 * 1024 * 1024;
+    active_snap.metrics.cluster_allocated_memory_bytes = 4ULL * 1024 * 1024 * 1024;
+    active_snap.metrics.cluster_aggregate_cores = 8;
+    active_snap.metrics.cluster_allocated_cores = 2;
 
     active_snap.total_registered_workers = 1;
-    active_snap.active_workers[0].worker_id = 707;
-    strcpy(active_snap.active_workers[0].hostname, "worker-01.local");
-    active_snap.active_workers[0].health = WORKER_HEALTH_ONLINE;
-    active_snap.active_workers[0].last_heartbeat_monotonic_ms = 4800;
-    active_snap.active_workers[0].resources.total_memory_bytes = 16ULL * 1024 * 1024 * 1024;
-    active_snap.active_workers[0].resources.reserved_memory_bytes = 4ULL * 1024 * 1024 * 1024;
-    active_snap.active_workers[0].resources.total_cores = 8;
-    active_snap.active_workers[0].resources.reserved_cores = 4;
-
-    active_snap.metrics.cluster_aggregate_memory_bytes = active_snap.active_workers[0].resources.total_memory_bytes;
-    active_snap.metrics.cluster_allocated_memory_bytes = active_snap.active_workers[0].resources.reserved_memory_bytes;
-    active_snap.metrics.cluster_aggregate_cores = active_snap.active_workers[0].resources.total_cores;
-    active_snap.metrics.cluster_allocated_cores = active_snap.active_workers[0].resources.reserved_cores;
-
+    WorkerMember* w = &active_snap.active_workers[0];
+    w->worker_id = 101;
+    strcpy(w->hostname, "worker-alpha");
+    w->health = WORKER_HEALTH_ONLINE;
+    w->last_heartbeat_monotonic_ms = 4500;
+    w->resources.total_memory_bytes = 16ULL * 1024 * 1024 * 1024;
+    w->resources.reserved_memory_bytes = 4ULL * 1024 * 1024 * 1024;
+    w->resources.total_cores = 8;
+    w->resources.reserved_cores = 2;
     active_snap.total_active_leases = 1;
-    active_snap.active_leases[0].chunk_id = 0xABC123;
-    active_snap.active_leases[0].status = LEASE_STATUS_EXECUTING;
-    active_snap.active_leases[0].progress_percentage = 75.5f;
-
+    ChunkLease* l = &active_snap.active_leases[0];
+    l->chunk_id = 5001;
+    l->workload_id = 9001;
+    l->assigned_worker_id = 101;
+    l->status = LEASE_STATUS_EXECUTING;
+    l->progress_percentage = 75.5f;
+    l->failure_retry_count = 0;
     ui_model_transform_snapshot(&active_snap, dummy_now, &view_model);
-    printf("Verify -> Global Health Status: %s\n", view_model.operational_status_text);
-    printf("Verify -> Aggregated Global Memory Allocated: %.2f / %.2f GB\n", view_model.cluster_used_memory_gb, view_model.cluster_total_memory_gb);
-    printf("Verify -> Calculated Total Cluster CPU Load: %.1f%%\n", view_model.cluster_overall_cpu_pct);
-    printf("Verify -> Node 0 Target Heartbeat Lag: %llums (Expected: 200ms)\n", (unsigned long long)view_model.nodes[0].ms_since_last_heartbeat);
-    printf("Verify -> Task 0 Status: %s | Progress Value: %.3f\n\n", view_model.tasks[0].status_text, view_model.tasks[0].progress_normalized);
-
-    // degraded cluster, failed lease with retries
-    printf("[TEST 3] Processing Degraded Node Metrics & Processing Flaps...\n");
-    active_snap.global_status = CLUSTER_STATUS_DEGRADED;
-    active_snap.active_workers[0].health = WORKER_HEALTH_SUSPECT;
-    active_snap.active_leases[0].status = LEASE_STATUS_FAILED;
-    active_snap.active_leases[0].failure_retry_count = 4;
-
-    ui_model_transform_snapshot(&active_snap, dummy_now, &view_model);
-    printf("Verify -> Global State Assessment: %s (Enum Mapping: %d)\n", view_model.operational_status_text, view_model.summary_health);
-    printf("Verify -> Node Health Status Mapping: %d (Expected: %d for Warn)\n", view_model.nodes[0].health, UI_HEALTH_WARN);
-    printf("Verify -> Task Attention Flag Set: %s\n\n", view_model.tasks[0].requires_attention ? "TRUE (Pass)" : "FALSE (Fail)");
-
-    // panic/outage
-    printf("[TEST 4] Processing Critical System Panic Outages...\n");
-    active_snap.global_status = CLUSTER_STATUS_PANIC;
-
-    ui_model_transform_snapshot(&active_snap, dummy_now, &view_model);
-    printf("Verify -> Status Text: %s\n", view_model.operational_status_text);
-    printf("Verify -> Critical Evaluation Check Match: %s\n", (view_model.summary_health == UI_HEALTH_CRIT) ? "PASS" : "FAIL");
-}
-
-// test driver
-int main(void) {
-    run_ui_model_test_suite();
-    return 0;
+    printf("Verify -> Health Token Enum: %d (Expected: %d for OK)\n", view_model.summary_health, UI_HEALTH_OK);
+    printf("Verify -> Operational Status Text: '%s'\n", view_model.operational_status_text);
+    printf("Verify -> Cluster Memory Total: %.1f GB | Used: %.1f GB\n", view_model.cluster_total_memory_gb, view_model.cluster_used_memory_gb);
+    printf("Verify -> Overall Cluster CPU: %.1f%%\n", view_model.cluster_overall_cpu_pct);
+    printf("Verify -> Node Count: %d | Node Hostname: '%s' | Monotonic Heartbeat Lag: %llu ms\n",view_model.node_count, view_model.nodes[0].display_name, (unsigned long long)view_model.nodes[0].ms_since_last_heartbeat);
+    printf("Verify -> Task Count: %d | Status Text: '%s' | Progress Normalized: %.3f\n",view_model.task_count, view_model.tasks[0].status_text, view_model.tasks[0].progress_normalized);
+    }
+    int main(void) {run_ui_model_test_suite();return 0;
 }

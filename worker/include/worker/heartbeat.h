@@ -1,22 +1,24 @@
-/* worker/heartbeat.h — report worker health and dynamic resources.
- *
- * TODO:
- * - Report active chunk count, reserved resources, and measured utilization.
- * - Include battery, charging, thermal, docking, and display state when
- *   available on the platform.
- * - Use the worker transport to send timestamped heartbeat messages.
- * - Support a slower heartbeat mode only when policy permits it.
- * - Keep this as a subsystem; it must not define a second main() function.
- */
 #ifndef VOM_WORKER_HEARTBEAT_H
 #define VOM_WORKER_HEARTBEAT_H
 
-/*
- * Comment-only future API:
- *
- * // int vom_worker_heartbeat_start(const char *worker_id,
- * //                                int interval_ms);
- * // void vom_worker_heartbeat_stop(void);
- */
+#include <stdint.h>
+#include <stdbool.h>
+
+typedef enum {
+    HEARTBEAT_MODE_NORMAL,
+    HEARTBEAT_MODE_THROTTLED,
+    HEARTBEAT_MODE_CONSERVATIVE
+} VomHeartbeatMode;
+
+typedef struct vom_heartbeat_manager vom_heartbeat_manager_t;
+
+vom_heartbeat_manager_t* vom_worker_heartbeat_create(void);
+void vom_worker_heartbeat_destroy(vom_heartbeat_manager_t *ctx);
+
+int32_t vom_worker_heartbeat_start(vom_heartbeat_manager_t *ctx, const char *worker_id, uint32_t interval_ms, void *opaque_transport_ctx, void *opaque_monitor_ctx);
+void vom_worker_heartbeat_stop(vom_heartbeat_manager_t *ctx);
+
+int32_t vom_worker_heartbeat_adjust_mode(vom_heartbeat_manager_t *ctx, VomHeartbeatMode mode, uint32_t custom_interval_ms);
+int32_t vom_worker_heartbeat_trigger_immediate(vom_heartbeat_manager_t *ctx);
 
 #endif /* VOM_WORKER_HEARTBEAT_H */

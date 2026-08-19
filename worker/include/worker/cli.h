@@ -1,23 +1,20 @@
-/* worker/cli.h — command-line parser planning notes for cluster-worker.
- *
- * TODO:
- * - Support --master ENDPOINT, --worker-id ID, --config PATH,
- *   --heartbeat-ms N, --no-discovery, and --test.
- * - Define struct vom_worker_args and vom_worker_cli_parse(...).
- * - Keep CLI parsing separate from worker transport and execution.
- */
 #ifndef VOM_WORKER_CLI_H
 #define VOM_WORKER_CLI_H
 
-#include "common/config.h"
+#include <stdint.h>
+#include <stdbool.h>
 
-/*
- * Comment-only future API:
- *
- * // struct vom_worker_args { ... };
- * // int vom_worker_cli_parse(int argc, char **argv,
- * //                          struct vom_config *cfg,
- * //                          struct vom_worker_args *out);
- */
+#define CLI_STR_MAX 128
 
-#endif /* VOM_WORKER_CLI_H */
+typedef struct {
+    char master_endpoint[CLI_STR_MAX];
+    char worker_id[CLI_STR_MAX];
+    char config_path[CLI_STR_MAX];
+    uint32_t heartbeat_interval_ms;
+    bool disable_discovery;
+    bool execute_self_test;
+} vom_worker_args_t;
+
+int vom_worker_cli_parse(int argc, char **argv, void *opaque_config_ctx, vom_worker_args_t *out_args);
+
+#endif
