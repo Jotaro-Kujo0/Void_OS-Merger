@@ -7,6 +7,10 @@ out/
 *.a
 *.so
 *.dylib
+*.obj
+
+# Runtime artifacts
+*.wal
 
 # CMake-generated artifacts
 CMakeCache.txt
@@ -16,8 +20,12 @@ Makefile
 CMakeScripts/
 Testing/
 
-# Cap'n Proto generated files live under ${CMAKE_CURRENT_BINARY_DIR}/gen,
-# which is already covered by the `build/` ignore above.
+# Python
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
 
 # Editor / OS junk
 .vscode/

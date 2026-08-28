@@ -54,3 +54,27 @@ make sim        # simulate one master and multiple workers (when implemented)
 
 Use only `master`, `worker`, `logical device`, `workload`, `chunk`, and
 `recovery` for the corresponding architectural concepts. The canonical binary names are `cluster-master` and `cluster-worker`.
+
+## Web Dashboard
+
+The web dashboard (`webui/`) provides a browser-based cluster terminal.
+
+### Local development
+
+```bash
+pip install websockets
+python webui/server.py
+# Open http://localhost:8080
+```
+
+### Deploy to Netlify
+
+1. Push to GitHub/GitLab/Bitbucket
+2. Go to [app.netlify.com](https://app.netlify.com)
+3. Import your repository
+4. Set **Publish directory:** `webui`
+5. Deploy
+
+The dashboard works in two modes:
+- **Local:** Python server reads the master's WAL file for live cluster state
+- **Netlify:** Serverless functions provide mock data for demo/testing
