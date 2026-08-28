@@ -1,0 +1,3 @@
+[build]
+  publish = "webui"
+  functions = "netlify/functions"

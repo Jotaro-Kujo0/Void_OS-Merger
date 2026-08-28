@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Void_OS-Merger — Cluster Terminal</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0c0c0c;--card:#111;--border:#2a2a2a;--green:#00ff41;--amber:#ffb000;--red:#ff3333;--cyan:#00e5ff;--dim:#555;--text:#b0b0b0;--bright:#e0e0e0;--font:'JetBrains Mono',monospace}
+body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;padding:12px;font-size:13px;line-height:1.4}
+a{color:var(--cyan)}
+
+/* Scanline overlay */
+body::after{content:'';position:fixed;top:0;left:0;width:100%;height:100%;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);pointer-events:none;z-index:9999}
+
+/* Header */
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--card);border:1px solid var(--border);margin-bottom:12px}
+.header h1{font-size:1rem;font-weight:700;color:var(--green);letter-spacing:1px}
+.header h1 span{color:var(--amber)}
+.status-line{display:flex;align-items:center;gap:12px;font-size:0.8rem}
+.status-badge{padding:2px 8px;border:1px solid;font-weight:700;text-transform:uppercase;font-size:0.7rem}
+.status-OPERATIONAL{border-color:var(--green);color:var(--green)}
+.status-DEGRADED{border-color:var(--amber);color:var(--amber)}
+.status-BOOTSTRAP{border-color:var(--cyan);color:var(--cyan)}
+.status-UNKNOWN{border-color:var(--red);color:var(--red)}
+.conn-dot{width:8px;height:8px;border-radius:50%;background:var(--red);transition:background 0.3s}
+.conn-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+
+/* Gear Map */
+.gear-panel{background:var(--card);border:1px solid var(--border);padding:12px;margin-bottom:12px}
+.gear-panel h2{font-size:0.75rem;color:var(--amber);margin-bottom:8px;text-transform:uppercase;letter-spacing:2px}
+.gear-display{background:#050505;border:1px solid #1a1a1a;padding:16px;min-height:140px;font-size:11px;line-height:1.2;white-space:pre;overflow-x:auto;color:var(--green)}
+.gear-display .idle{color:var(--dim)}
+.gear-label{font-size:9px;color:var(--dim);text-align:center;margin-top:2px}
+
+/* Metrics */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.metric{background:var(--card);border:1px solid var(--border);padding:10px;text-align:center}
+.metric .value{font-size:1.3rem;font-weight:700;color:var(--green)}
+.metric .label{font-size:0.65rem;color:var(--dim);margin-top:2px;text-transform:uppercase;letter-spacing:1px}
+
+/* Grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--border);padding:14px}
+.card h2{font-size:0.75rem;color:var(--amber);margin-bottom:10px;text-transform:uppercase;letter-spacing:2px}
+
+/* Worker list */
+.worker{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#0a0a0a;border:1px solid #1a1a1a;margin-bottom:6px;font-size:12px}
+.worker .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.worker .dot.ONLINE{background:var(--green);box-shadow:0 0 4px var(--green)}
+.worker .dot.DRAINING{background:var(--amber)}
+.worker .dot.OFFLINE{background:var(--red)}
+.worker .info{flex:1;min-width:0}
+.worker .name{color:var(--bright);font-weight:700}
+.worker .detail{color:var(--dim);font-size:10px}
+.worker .bars{display:flex;gap:6px;flex-shrink:0}
+.mini-bar{width:50px;height:4px;background:#1a1a1a;overflow:hidden}
+.mini-bar .fill{height:100%;transition:width 0.5s ease}
+.mini-bar .fill.cpu{background:var(--cyan)}.mini-bar .fill.mem{background:#a78bfa}
+
+/* Chunk list */
+.chunk{padding:8px 12px;background:#0a0a0a;border:1px solid #1a1a1a;margin-bottom:6px;font-size:12px}
+.chunk .row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.chunk .id{color:var(--cyan);font-weight:700;font-size:11px}
+.chunk .status{font-size:10px;padding:1px 6px;border:1px solid;font-weight:700}
+.chunk .status.RUNNING{border-color:var(--cyan);color:var(--cyan)}
+.chunk .status.COMPLETED{border-color:var(--green);color:var(--green)}
+.chunk .status.FAILED{border-color:var(--red);color:var(--red)}
+.chunk .status.TIMED_OUT{border-color:var(--amber);color:var(--amber)}
+.progress-bar{width:100%;height:3px;background:#1a1a1a;overflow:hidden}
+.progress-bar .fill{height:100%;background:var(--cyan);transition:width 0.5s ease}
+.progress-bar .fill.done{background:var(--green)}
+
+/* Info rows */
+.info-row{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:11px}
+.info-row:last-child{border-bottom:none}
+.info-row .key{color:var(--dim)}
+.info-row .val{color:var(--bright);font-weight:700;font-size:11px}
+
+/* Command panel */
+.cmd-panel{background:var(--card);border:1px solid var(--border);padding:12px;margin-bottom:12px}
+.cmd-panel h2{font-size:0.75rem;color:var(--amber);margin-bottom:8px;text-transform:uppercase;letter-spacing:2px}
+.cmd-row{display:flex;gap:6px}
+.cmd-input{flex:1;background:#0a0a0a;border:1px solid var(--border);padding:8px 12px;color:var(--green);font-family:var(--font);font-size:12px;outline:none}
+.cmd-input:focus{border-color:var(--green)}
+.cmd-input::placeholder{color:#333}
+.cmd-btn{background:transparent;color:var(--green);border:1px solid var(--green);padding:8px 14px;font-family:var(--font);font-size:11px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:all 0.2s}
+.cmd-btn:hover{background:var(--green);color:#000}
+.cmd-output{margin-top:8px;padding:8px 12px;background:#0a0a0a;border:1px solid #1a1a1a;font-size:11px;color:var(--dim);max-height:150px;overflow-y:auto;white-space:pre-wrap;display:none}
+.cmd-output.show{display:block}
+
+/* Dummy worker buttons */
+.dummy-panel{border-color:#22c55e33;margin-bottom:12px}
+.dummy-panel h2{color:var(--green)}
+.dummy-btns{display:flex;gap:6px;flex-wrap:wrap}
+.dummy-btns .cmd-btn{border-color:var(--green)}
+.dummy-btns .cmd-btn:hover{background:var(--green);color:#000}
+.dummy-btns .cmd-btn.warn{border-color:var(--amber);color:var(--amber)}
+.dummy-btns .cmd-btn.warn:hover{background:var(--amber);color:#000}
+
+/* Empty */
+.empty{text-align:center;padding:16px;color:var(--dim);font-size:11px}
+
+/* ASCII gear characters */
+.gear-active{color:var(--green);text-shadow:0 0 4px var(--green)}
+.gear-idle{color:#2a2a2a}
+.gear-dim{color:var(--dim)}
+.gear-label-active{color:var(--green);font-weight:700}
+.gear-label-idle{color:var(--dim)}
+.gear-link{color:#1a3a1a}
+.gear-link-active{color:var(--green);text-shadow:0 0 2px var(--green)}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>VOID_OS<span>-MERGER</span> // CLUSTER TERMINAL</h1>
+  <div class="status-line">
+    <span id="statusBadge" class="status-badge status-BOOTSTRAP">CONNECTING</span>
+    <div id="connDot" class="conn-dot"></div>
+  </div>
+</div>
+
+<div class="metrics" id="metrics">
+  <div class="metric"><div class="value" id="mWorkers">0</div><div class="label">Workers</div></div>
+  <div class="metric"><div class="value" id="mCores">0/0</div><div class="label">Cores</div></div>
+  <div class="metric"><div class="value" id="mMemory">0/0</div><div class="label">RAM GB</div></div>
+  <div class="metric"><div class="value" id="mChunks">0</div><div class="label">Chunks</div></div>
+</div>
+
+<!-- ASCII Gear Map -->
+<div class="gear-panel">
+  <h2>&gt; TOPOLOGY MAP</h2>
+  <div class="gear-display" id="gearDisplay">
+<span class="idle">Waiting for workers to connect...</span></div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>&gt; CLUSTER INFO</h2>
+    <div id="clusterInfo">
+      <div class="info-row"><span class="key">UUID</span><span class="val" id="infoUUID">-</span></div>
+      <div class="info-row"><span class="key">EPOCH</span><span class="val" id="infoEpoch">-</span></div>
+      <div class="info-row"><span class="key">GEN</span><span class="val" id="infoGen">-</span></div>
+      <div class="info-row"><span class="key">STATUS</span><span class="val" id="infoStatus">-</span></div>
+    </div>
+  </div>
+  <div class="card" style="grid-column:span 2">
+    <h2>&gt; WORKERS (<span id="workerCount">0</span>)</h2>
+    <div id="workerList"><div class="empty">No workers connected</div></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:12px">
+  <h2>&gt; ACTIVE CHUNKS (<span id="chunkCount">0</span>)</h2>
+  <div id="chunkList"><div class="empty">No active chunks</div></div>
+</div>
+
+<!-- Dummy Worker Panel -->
+<div class="cmd-panel dummy-panel">
+  <h2>&gt; ADD DUMMY WORKERS</h2>
+  <div class="dummy-btns">
+    <button class="cmd-btn" onclick="addWorker('')">+ 1</button>
+    <button class="cmd-btn" onclick="addWorkers(3)">+ 3</button>
+    <button class="cmd-btn" onclick="addWorkers(5)">+ 5</button>
+    <button class="cmd-btn" onclick="addWorkers(10)">+ 10</button>
+    <button class="cmd-btn warn" onclick="clearWorkers()">CLEAR ALL</button>
+  </div>
+  <div class="cmd-output" id="workerOutput"></div>
+</div>
+
+<!-- Command Panel -->
+<div class="cmd-panel">
+  <h2>&gt; COMMANDS</h2>
+  <div class="cmd-row">
+    <input class="cmd-input" id="cmdInput" placeholder="status, add, addmany 5, clearworkers, help..." />
+    <button class="cmd-btn" onclick="sendCommand()">EXEC</button>
+  </div>
+  <div class="cmd-output" id="cmdOutput"></div>
+</div>
+
+<script>
+let connected = false;
+let gearFrame = 0;// ==================== ASCII GEAR SYSTEM ====================
+// Main gear from assets/gear.txt — spinning animation via frame swap
+const MAIN_GEAR_SPIN = [
+  ['        ████████████        ','      ██░░░░░░░░░░██      ','    ██░░░░░░░░░░░░░░██    ','  ██░░░░░░░░░░░░░░░░░░██  ','  ██░░░░░░░░░░░░░░░░░░██  ','  ██░░░░░░████████░░░░██  ','  ██░░░░██        ██░░░░██','  ██░░██            ██░░██','  ██░░██            ██░░██','  ██░░░░██        ██░░░░██','  ██░░░░░░████████░░░░██  ','  ██░░░░░░░░░░░░░░░░░░██  ','  ██░░░░░░░░░░░░░░░░░░██  ','    ██░░░░░░░░░░░░░░██    ','      ██░░░░░░░░░░██      ','        ████████████        '],
+  ['       ██████████████       ','     ██░░░░░░░░░░░░██     ','    █░░░░░░░░░░░░░░░░█    ','  ██░░░░░░░░░░░░░░░░░░██  ','  █░░░░░░░░░░░░░░░░░░░░█  ',' ██░░░░░░░░████░░░░░░░░██ ',' ██░░░░░░██    ██░░░░░░░█ ',' ██░░░░██        ██░░░░░█ ',' ██░░░░██        ██░░░░░█ ',' ██░░░░░░██    ██░░░░░░░█ ',' ██░░░░░░░░████░░░░░░░░██ ','  █░░░░░░░░░░░░░░░░░░░░█  ','  ██░░░░░░░░░░░░░░░░░░██  ','    █░░░░░░░░░░░░░░░░█    ','     ██░░░░░░░░░░░░██     ','       ██████████████       '],
+  ['      ████████████████      ','    ██░░░░░░░░░░░░░░██    ','   █░░░░░░░░░░░░░░░░░░█   ','  ██░░░░░░░░░░░░░░░░░░██  ',' █░░░░░░░░░░░░░░░░░░░░░░█ ',' ██░░░░░░░░░████░░░░░░░██ ',' ██░░░░░░░██    ██░░░░░░██',' ██░░░░░██          ██░░██',' ██░░░░░██          ██░░██',' ██░░░░░░░██    ██░░░░░░██',' ██░░░░░░░░░████░░░░░░░██ ',' █░░░░░░░░░░░░░░░░░░░░░░█ ','  ██░░░░░░░░░░░░░░░░░░██  ','   █░░░░░░░░░░░░░░░░░░█   ','    ██░░░░░░░░░░░░░░██    ','      ████████████████      '],
+  ['     ██████████████████     ','    █░░░░░░░░░░░░░░░░░█    ','   █░░░░░░░░░░░░░░░░░░░█   ','  █░░░░░░░░░░░░░░░░░░░░░█  ',' ██░░░░░░░░░░░░░░░░░░░░░██ ',' ██░░░░░░░░░████░░░░░░░░██',' ██░░░░░░░██    ██░░░░░░░█',' ██░░░░░██          ██░░░█',' ██░░░░░██          ██░░░█',' ██░░░░░░░██    ██░░░░░░░█',' ██░░░░░░░░░████░░░░░░░░██',' ██░░░░░░░░░░░░░░░░░░░░░██','  █░░░░░░░░░░░░░░░░░░░░░█  ','   █░░░░░░░░░░░░░░░░░░░█   ','    █░░░░░░░░░░░░░░░░░█    ','     ██████████████████     '],
+];
+
+// Small satellite gear (5 lines)
+function getSmallGear(frame, active) {
+  if (!active) return [' .-. ','|   |','+   +','|   |',' `-.\' '];
+  const sp = ['-','\\','|','/'];
+  const f = frame % 4;
+  return [`/${sp[(f+1)%4]}\\`,`|${sp[f]} ${sp[f]}|`,'+   +',`|${sp[f]} ${sp[f]}|`,`\\${sp[(f+1)%4]}/`];
+}
+
+function renderAsciiGears(workers) {
+  const el = document.getElementById('gearDisplay');
+  if (workers.length === 0) {
+    el.innerHTML = '<span class="idle">Waiting for workers...\n  &gt; add | addmany 5 | start cluster-worker</span>';
+    return;
+  }
+  const lines = [];
+  const MG = MAIN_GEAR_SPIN[gearFrame % MAIN_GEAR_SPIN.length];
+  const MW = MG[0].length, MH = MG.length;
+  const SGW = 5, SGH = 5;
+  const numSat = Math.min(workers.length, 8);
+  const totalW = MW + numSat * (SGW + 4) + 8;
+  const totalH = MH + 6;
+  // Blank canvas
+  const cv = [], cm = [];
+  for (let y = 0; y < totalH; y++) { cv.push(new Array(totalW).fill(' ')); cm.push(new Array(totalW).fill(0)); }
+  // Place main gear center
+  const mx = Math.floor((totalW - MW) / 2), my = 2;
+  const mActive = workers.some(w => w.health === 'ONLINE');
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    const ch = MG[y][x] || ' ';
+    if (ch !== ' ') { cv[my+y][mx+x] = ch; cm[my+y][mx+x] = mActive ? 1 : 0; }
+  }
+  // Satellite positions around main gear
+  const satPos = [
+    {x:mx-SGW-3,y:my-1},{x:mx+MW+3,y:my-1},
+    {x:mx-SGW-3,y:my+MH-SGH+1},{x:mx+MW+3,y:my+MH-SGH+1},
+    {x:mx-SGW*2-8,y:my+Math.floor(MH/2)-2},{x:mx+MW+8,y:my+Math.floor(MH/2)-2},
+    {x:mx+Math.floor(MW/2)-2,y:my-SGH-1},{x:mx+Math.floor(MW/2)-2,y:my+MH+1},
+  ];
+  for (let i = 0; i < numSat; i++) {
+    const w = workers[i], act = w.health === 'ONLINE', draining = w.health === 'DRAINING';
+    const p = satPos[i], sg = getSmallGear(gearFrame+i, act);
+    for (let y = 0; y < SGH; y++) for (let x = 0; x < SGW; x++) {
+      const px=p.x+x, py=p.y+y;
+      if (px>=0&&px<totalW&&py>=0&&py<totalH) {
+        const ch = sg[y][x]||' ';
+        if (ch!==' ') { cv[py][px]=ch; cm[py][px]=act?1:(draining?2:0); }
+      }
+    }
+    // Link line
+    const ly = p.y+2;
+    if (ly>=0&&ly<totalH) {
+      const ls = p.x+SGW, le = p.x<mx ? mx : mx+MW;
+      for (let x=ls;x<le&&x<totalW;x++) if (x>=0&&cv[ly][x]===' ') { cv[ly][x]=(act&&mActive)?'=':'-'; cm[ly][x]=(act&&mActive)?3:0; }
+    }
+  }
+  // Render
+  const cc = ['gear-idle','gear-active','gear-label-idle','gear-link-active'];
+  for (let y=0;y<totalH;y++) {
+    let line='', cur=-1;
+    for (let x=0;x<totalW;x++) {
+      const c=cm[y][x];
+      if (c!==cur) { if(cur>=0) line+='</span>'; line+=`<span class="${cc[c]}">`; cur=c; }
+      line+=cv[y][x];
+    }
+    if(cur>=0) line+='</span>';
+    lines.push(line);
+  }
+  // Labels
+  lines.push('');
+  let lbl='<span class="gear-dim">';
+  for (let i=0;i<workers.length;i++) {
+    const w=workers[i],act=w.health==='ONLINE';
+    lbl+=`<span class="${act?'gear-label-active':'gear-label-idle'}">#${w.id} ${w.total_cores||0}c</span>`;
+    if(i<workers.length-1) lbl+='<span class="gear-dim">  |  </span>';
+  }
+  lbl+='</span>'; lines.push(lbl);
+  el.innerHTML=lines.join('\n');
+}
+
+// ==================== DASHBOARD UPDATE ====================
+
+// Detect if running on Netlify or locally
+const API_BASE = (typeof window !== 'undefined' && window.location.hostname.includes('netlify'))
+  ? '/.netlify/functions'
+  : '';
+
+function pollState() {
+  fetch(`${API_BASE}/state`)
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(data => {
+      connected = true;
+      document.getElementById('connDot').classList.add('ok');
+      updateDashboard(data);
+    })
+    .catch(() => {
+      connected = false;
+      document.getElementById('connDot').classList.remove('ok');
+    });
+}
+
+function updateDashboard(state) {
+  const badge = document.getElementById('statusBadge');
+  const status = state.global_status || 'UNKNOWN';
+  badge.className = `status-badge status-${status}`;
+  badge.textContent = (state.mock ? 'DEMO ' : '') + status;
+
+  const m = state.metrics || {};
+  document.getElementById('mWorkers').textContent = m.active_workers ?? state.total_workers ?? 0;
+  document.getElementById('mCores').textContent = `${m.allocated_cores ?? 0}/${m.aggregate_cores ?? 0}`;
+  document.getElementById('mMemory').textContent = `${m.allocated_memory_gb ?? 0}/${m.aggregate_memory_gb ?? 0}`;
+  document.getElementById('mChunks').textContent = state.total_leases ?? 0;
+
+  document.getElementById('infoUUID').textContent = (state.cluster_uuid || '-').substring(0, 30);
+  document.getElementById('infoEpoch').textContent = state.master_epoch || '-';
+  document.getElementById('infoGen').textContent = state.state_generation || '-';
+  document.getElementById('infoStatus').textContent = status;
+
+  // Workers
+  const workers = state.workers || [];
+  document.getElementById('workerCount').textContent = workers.length;
+  const wl = document.getElementById('workerList');
+  if (workers.length === 0) {
+    wl.innerHTML = '<div class="empty">No workers connected</div>';
+  } else {
+    wl.innerHTML = workers.map(w => {
+      const cpuPct = w.total_cores ? Math.round((w.reserved_cores / w.total_cores) * 100) : 0;
+      const memPct = w.total_memory_gb ? Math.round((w.reserved_memory_gb / w.total_memory_gb) * 100) : 0;
+      const ago = w.last_seen_ms ? Math.round((Date.now() - w.last_seen_ms) / 1000) : '?';
+      const dummyTag = w.dummy ? ' <span style="color:var(--amber)">[DUMMY]</span>' : '';
+      return `<div class="worker">
+        <div class="dot ${w.health}"></div>
+        <div class="info">
+          <div class="name">#${w.id} ${w.name || ''}${dummyTag}</div>
+          <div class="detail">${w.total_cores}c ${w.total_memory_gb}GB ${w.health} ${ago}s</div>
+        </div>
+        <div class="bars">
+          <div title="CPU: ${w.reserved_cores}/${w.total_cores}"><div class="mini-bar"><div class="fill cpu" style="width:${cpuPct}%"></div></div></div>
+          <div title="RAM: ${w.reserved_memory_gb}/${w.total_memory_gb}"><div class="mini-bar"><div class="fill mem" style="width:${memPct}%"></div></div></div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Chunks
+  const chunks = state.leases || [];
+  document.getElementById('chunkCount').textContent = chunks.length;
+  const cl = document.getElementById('chunkList');
+  if (chunks.length === 0) {
+    cl.innerHTML = '<div class="empty">No active chunks</div>';
+  } else {
+    cl.innerHTML = chunks.map(c => {
+      const done = c.status === 'COMPLETED';
+      return `<div class="chunk">
+        <div class="row">
+          <span class="id">#${c.chunk_id}</span>
+          <span class="status ${c.status}">${c.status}</span>
+        </div>
+        <div class="progress-bar"><div class="fill${done ? ' done' : ''}" style="width:${c.progress}%"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:3px;font-size:10px;color:var(--dim)">
+          <span>${c.progress}%</span>
+          ${c.retry_count > 0 ? `<span>retries: ${c.retry_count}</span>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Update ASCII gears
+  renderAsciiGears(workers);
+}
+
+// ==================== DUMMY WORKERS ====================
+
+// Local state for dummy workers (since Netlify Functions are stateless)
+let localDummyWorkers = [];
+let nextLocalDummyId = 200;
+
+function makeLocalDummyWorker(name) {
+  const cores = [2, 4, 8, 16][Math.floor(Math.random() * 4)];
+  const memOptions = [4.0, 8.0, 16.0, 32.0];
+  const mem = memOptions[Math.floor(Math.random() * memOptions.length)];
+  nextLocalDummyId++;
+  return {
+    id: nextLocalDummyId,
+    health: "ONLINE",
+    last_seen_ms: Date.now(),
+    total_memory_gb: mem,
+    reserved_memory_gb: Math.round(Math.random() * (mem / 2) * 10) / 10,
+    total_cores: cores,
+    reserved_cores: Math.floor(Math.random() * (cores / 2)),
+    dummy: true,
+    name: name || `dummy-${nextLocalDummyId}`,
+  };
+}
+
+function getLocalState() {
+  // Combine base state from server with local dummy workers
+  const baseState = {
+    cluster_uuid: "vom-cluster-uuid-4f9e-a1b2-7cc892de410f",
+    master_epoch: Math.floor(Date.now() / 1000),
+    state_generation: 1,
+    global_status: "OPERATIONAL",
+    workers: [
+      {
+        id: 42,
+        health: "ONLINE",
+        last_seen_ms: Date.now(),
+        total_memory_gb: 16.0,
+        reserved_memory_gb: 4.0,
+        total_cores: 8,
+        reserved_cores: 2,
+        dummy: false,
+      },
+      {
+        id: 43,
+        health: "ONLINE",
+        last_seen_ms: Date.now() - 2000,
+        total_memory_gb: 8.0,
+        reserved_memory_gb: 2.0,
+        total_cores: 4,
+        reserved_cores: 1,
+        dummy: false,
+      },
+    ],
+    total_workers: 2,
+    leases: [
+      { chunk_id: 1001, status: "RUNNING", progress: 67.5, retry_count: 0 },
+      { chunk_id: 1002, status: "RUNNING", progress: 33.2, retry_count: 0 },
+      { chunk_id: 999, status: "COMPLETED", progress: 100.0, retry_count: 0 },
+    ],
+    total_leases: 3,
+    metrics: {
+      aggregate_memory_gb: 24.0,
+      allocated_memory_gb: 6.0,
+      aggregate_cores: 12,
+      allocated_cores: 3,
+      active_workers: 2,
+    },
+    read_time: Date.now() / 1000,
+  };
+
+  // Merge local dummy workers
+  if (localDummyWorkers.length > 0) {
+    const workers = [...baseState.workers, ...localDummyWorkers];
+    baseState.workers = workers;
+    baseState.total_workers = workers.length;
+
+    const agg_cores = workers.reduce((s, w) => s + (w.total_cores || 0), 0);
+    const alloc_cores = workers.reduce((s, w) => s + (w.reserved_cores || 0), 0);
+    const agg_mem = workers.reduce((s, w) => s + (w.total_memory_gb || 0), 0);
+    const alloc_mem = workers.reduce((s, w) => s + (w.reserved_memory_gb || 0), 0);
+    const active = workers.filter((w) => w.health === "ONLINE").length;
+
+    baseState.metrics = {
+      aggregate_memory_gb: Math.round(agg_mem * 10) / 10,
+      allocated_memory_gb: Math.round(alloc_mem * 10) / 10,
+      aggregate_cores: agg_cores,
+      allocated_cores: alloc_cores,
+      active_workers: active,
+    };
+  }
+
+  return baseState;
+}
+
+function applyState(data) {
+  if (data.state) updateDashboard(data.state);
+  else pollState();
+}
+
+async function addWorker(name) {
+  const out = document.getElementById('workerOutput');
+  out.classList.add('show');
+  try {
+    const resp = await fetch(`${API_BASE}/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: 'add-worker', name: name || undefined }),
+    });
+    const data = await resp.json();
+    out.textContent += `> ${data.output}\n`;
+    out.scrollTop = out.scrollHeight;
+    // Merge returned state with local dummy workers
+    if (data.state) {
+      data.state.workers = [...(data.state.workers || []), ...localDummyWorkers];
+      updateDashboard(data.state);
+    }
+  } catch(e) {
+    out.textContent += `> ERROR: ${e.message}\n`;
+  }
+}
+
+async function addRandomWorker() {
+  const out = document.getElementById('workerOutput');
+  out.classList.add('show');
+  try {
+    const resp = await fetch(`${API_BASE}/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: 'random-worker' }),
+    });
+    const data = await resp.json();
+    out.textContent += `> ${data.output}\n`;
+    out.scrollTop = out.scrollHeight;
+    if (data.state) {
+      data.state.workers = [...(data.state.workers || []), ...localDummyWorkers];
+      updateDashboard(data.state);
+    }
+  } catch(e) {
+    out.textContent += `> ERROR: ${e.message}\n`;
+  }
+}
+
+async function addWorkers(n) {
+  for (let i = 0; i < n; i++) {
+    await addRandomWorker();
+  }
+}
+
+async function clearWorkers() {
+  const out = document.getElementById('workerOutput');
+  out.classList.add('show');
+  try {
+    const resp = await fetch(`${API_BASE}/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: 'clear-workers' }),
+    });
+    const data = await resp.json();
+    out.textContent += `> ${data.output}\n`;
+    out.scrollTop = out.scrollHeight;
+    localDummyWorkers = [];
+    if (data.state) updateDashboard(data.state);
+  } catch(e) {
+    out.textContent += `> ERROR: ${e.message}\n`;
+  }
+}
+
+// ==================== COMMANDS ====================
+
+async function sendCommand() {
+  const input = document.getElementById('cmdInput');
+  const output = document.getElementById('cmdOutput');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+
+  output.classList.add('show');
+  output.textContent += `> ${cmd}\n`;
+  input.value = '';
+
+  const parts = cmd.split(/\s+/);
+  const verb = parts[0].toLowerCase();
+
+  if (verb === 'clear') { output.textContent = ''; output.classList.remove('show'); return; }
+
+  if (verb === 'help') {
+    output.textContent += 'COMMANDS:\n';
+    output.textContent += '  status         cluster status\n';
+    output.textContent += '  add [name]     add dummy worker\n';
+    output.textContent += '  addrandom      add random worker\n';
+    output.textContent += '  addmany <n>    add n workers\n';
+    output.textContent += '  remove <id>    remove dummy worker\n';
+    output.textContent += '  clearworkers   remove all dummies\n';
+    output.textContent += '  clear          clear output\n';
+    output.scrollTop = output.scrollHeight;
+    return;
+  }
+
+  if (verb === 'add') { await addWorker(parts.slice(1).join(' ') || ''); return; }
+  if (verb === 'addrandom') { await addRandomWorker(); return; }
+  if (verb === 'addmany') { await addWorkers(parseInt(parts[1]) || 3); return; }
+  if (verb === 'clearworkers') { await clearWorkers(); return; }
+  if (verb === 'remove') {
+    const out = document.getElementById('workerOutput');
+    out.classList.add('show');
+    try {
+      const resp = await fetch(`${API_BASE}/command`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: 'remove-worker', id: parseInt(parts[1]) || 0 }),
+      });
+      const data = await resp.json();
+      out.textContent += `> ${data.output}\n`;
+      localDummyWorkers = localDummyWorkers.filter(w => w.id !== (parseInt(parts[1]) || 0));
+      pollState();
+    } catch(e) { out.textContent += `> ERROR: ${e.message}\n`; }
+    return;
+  }
+
+  // Server-side commands
+  const commandMap = {
+    'status': 'status',
+    'submit': 'submit',
+    'inspect': 'inspect',
+    'cancel': 'cancel',
+    'drain': 'drain',
+  };
+
+  const command = commandMap[verb];
+  if (!command) {
+    output.textContent += `> Unknown command: "${verb}". Type help.\n`;
+    output.scrollTop = output.scrollHeight;
+    return;
+  }
+
+  output.textContent += 'Running...\n';
+  output.scrollTop = output.scrollHeight;
+
+  try {
+    const resp = await fetch(`${API_BASE}/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command, ...getBodyForCommand(verb, parts) }),
+    });
+    const data = await resp.json();
+    output.textContent = output.textContent.replace('Running...\n', '');
+    output.textContent += `${data.output}\n`;
+  } catch(e) {
+    output.textContent = output.textContent.replace('Running...\n', '');
+    output.textContent += `> ERROR: ${e.message}\n`;
+  }
+  output.scrollTop = output.scrollHeight;
+}
+
+function getBodyForCommand(verb, parts) {
+  switch (verb) {
+    case 'submit': return { workload: parts[1] || 'workload.json' };
+    case 'inspect': return { id: parts[1] || '0' };
+    case 'cancel': return { id: parts[1] || '0' };
+    case 'drain': return { worker_id: parts[1] || '' };
+    default: return {};
+  }
+}
+
+document.getElementById('cmdInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendCommand();
+});
+
+// ==================== ANIMATION LOOP ====================
+
+function animate() {
+  gearFrame = (gearFrame + 1) % 8;
+  renderAsciiGears(window._lastWorkers || []);
+  requestAnimationFrame(animate);
+}
+
+const origUpdate = updateDashboard;
+updateDashboard = function(state) {
+  window._lastWorkers = state.workers || [];
+  origUpdate(state);
+};
+
+setInterval(pollState, 1000);
+pollState();
+animate();
+</script>
+</body>
+</html>
