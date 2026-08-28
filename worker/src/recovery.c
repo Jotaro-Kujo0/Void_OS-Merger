@@ -1,10 +1,9 @@
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <unistd.h>
+#include <common/compat.h>
 
 #define WORKER_MAX_ACTIVE_LEASES 16
 #define IDENTITY_NAME_MAX        64
@@ -180,7 +179,9 @@ void execute_worker_recovery_test_suite(void) {
     vom_worker_recovery_destroy(rec);
 }
 
+#ifdef VOM_STANDALONE_TEST
 int main(void) {
     execute_worker_recovery_test_suite();
     return 0;
 }
+#endif

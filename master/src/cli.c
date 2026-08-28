@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <getopt.h>
 #include <ctype.h>
 #include <stdbool.h>
+#include <time.h>
+#include <common/compat.h>
 
 /* --- Embedded Interface Types to Bypass Include Failures --- */
 typedef struct vom_master_args {
@@ -115,7 +116,26 @@ int vom_master_cli_parse(int argc, char **argv, void *cfg_ptr, vom_master_args_t
 
             case 'u':
                 out->print_uuid = true;
-                printf("vom-master-uuid-4f9e-a1b2-7cc892de410f\n");
+                {
+                    /* Generate UUID from hardware MAC address */
+                    char uuid_buf[64] = {0};
+                    FILE *mf = NULL;
+#if defined(__linux__)
+                    mf = fopen("/sys/class/net/eth0/address", "r");
+                    if (!mf) mf = fopen("/sys/class/net/wlan0/address", "r");
+#endif
+                    if (mf) {
+                        char mac[18] = {0};
+                        if (fscanf(mf, "%17s", mac) == 1) {
+                            snprintf(uuid_buf, sizeof(uuid_buf), "vom-%s-%lld", mac, (long long)time(NULL));
+                        }
+                        fclose(mf);
+                    }
+                    if (uuid_buf[0] == '\0') {
+                        snprintf(uuid_buf, sizeof(uuid_buf), "vom-%d-%lld", (int)getpid(), (long long)time(NULL));
+                    }
+                    printf("%s\n", uuid_buf);
+                }
                 exit(EXIT_SUCCESS);
 
             case 's':

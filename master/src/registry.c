@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <pthread.h>
+#include <common/compat.h>
 
 #define REG_MAX_WORKERS      64
 #define REG_MAX_CHUNKS       32

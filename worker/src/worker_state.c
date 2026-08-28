@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <pthread.h>
+#include <common/compat.h>
 
 typedef enum {
     WRK_STATE_OFFLINE,
@@ -187,7 +187,9 @@ void execute_worker_state_test_suite(void) {
     vom_worker_state_destroy(ws);
 }
 
+#ifdef VOM_STANDALONE_TEST
 int main(void) {
     execute_worker_state_test_suite();
     return 0;
 }
+#endif

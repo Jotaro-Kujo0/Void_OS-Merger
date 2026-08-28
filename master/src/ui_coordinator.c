@@ -172,7 +172,9 @@ void execute_ui_coordinator_test_suite(void) {
     vom_ui_coordinator_destroy(ui);
 }
 
+#ifdef VOM_STANDALONE_TEST
 int main(void) {
     execute_ui_coordinator_test_suite();
     return 0;
 }
+#endif

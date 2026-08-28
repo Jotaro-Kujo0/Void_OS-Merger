@@ -11,7 +11,7 @@
 #define VOM_HEARTBEAT_INTERVAL_MS 5000 
 #define REG_NAME_MAX 64
 
-/* --- Complete Typedef Definitions --- */
+// Complete Typedef Definitions 
 typedef enum {
     VOM_ARCH_X86_64,
     VOM_ARCH_AARCH64,

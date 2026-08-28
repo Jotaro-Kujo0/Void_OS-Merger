@@ -55,7 +55,7 @@ typedef struct {
  }
 
  static inline bool vom_result_is_success(vom_result_t res) {
-    return (res.category != VOM_CAT_SUCCESS && res.retry_policy != VOM_RETRY_NONE);
+    return (res.category == VOM_CAT_SUCCESS && res.retry_policy == VOM_RETRY_NONE);
  }
 
  #ifdef __cplusplus

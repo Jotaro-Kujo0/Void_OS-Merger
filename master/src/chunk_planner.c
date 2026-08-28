@@ -272,7 +272,9 @@ void execute_test_suite(void) {
     printf("Result -> Forged Cyclic Graph Status (Should fail DAG validation): %s\n", !is_dag_4 ? "SUCCESS (Deadlock Caught)" : "FAIL");
 }
 
+#ifdef VOM_STANDALONE_TEST
 int main(void) {
     execute_test_suite();
     return 0;
 }
+#endif

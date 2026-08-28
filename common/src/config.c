@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 
@@ -7,21 +8,23 @@
 #define MAX_VAL_LEN  128
 #define MAX_ITEMS    100
 
-/* --- Embedded Interface Structures to Bypass Include Path Failures --- */
-typedef struct {
-    char section[MAX_NAME_LEN];
-    char key[MAX_NAME_LEN];
-    char value[MAX_VAL_LEN];
-} vom_config_entry;
+#include <stdint.h>
+#include <stdbool.h>
+
+#define CONFIG_STR_MAX 128
 
 typedef struct {
-    vom_config_entry entries[MAX_ITEMS];
-    int count;
-} vom_config;
+    char cluster_name[CONFIG_STR_MAX];
+    char master_endpoint[CONFIG_STR_MAX];
+    char worker_id[CONFIG_STR_MAX];
+    uint32_t heartbeat_interval_sec;
+    char advertised_capabilities[CONFIG_STR_MAX];
+    char log_level[CONFIG_STR_MAX];
+} vom_config_t;
 
 /* --- Core Function Declarations --- */
-vom_config vom_config_defaults(void);
-vom_config vom_config_load(const char *filename);
+void vom_config_defaults(vom_config_t *out);
+bool vom_config_load(const char *filename, vom_config_t *out);
 
 static char *trim_whitespace(char *str) {
     char *end;
@@ -45,40 +48,41 @@ static void strip_comment(char *str) {
     }
 }
 
-static void add_entry(vom_config *config, const char *sec, const char *key, const char *val) {
-    if (config->count >= MAX_ITEMS) return;
-
-    strncpy(config->entries[config->count].section, sec, MAX_NAME_LEN - 1);
-    strncpy(config->entries[config->count].key, key, MAX_NAME_LEN - 1);
-    strncpy(config->entries[config->count].value, val, MAX_VAL_LEN - 1);
-
-    config->entries[config->count].section[MAX_NAME_LEN - 1] = '\0';
-    config->entries[config->count].key[MAX_NAME_LEN - 1] = '\0';
-    config->entries[config->count].value[MAX_VAL_LEN - 1] = '\0';
-
-    config->count++;
+static void set_config_entry(vom_config_t *config, const char *section, const char *key, const char *val) {
+    if (strcmp(section, "cluster") == 0 && strcmp(key, "name") == 0) {
+        strncpy(config->cluster_name, val, CONFIG_STR_MAX - 1);
+    } else if (strcmp(section, "master") == 0 && strcmp(key, "endpoint") == 0) {
+        strncpy(config->master_endpoint, val, CONFIG_STR_MAX - 1);
+    } else if (strcmp(section, "worker") == 0 && strcmp(key, "id") == 0) {
+        strncpy(config->worker_id, val, CONFIG_STR_MAX - 1);
+    } else if (strcmp(section, "worker") == 0 && strcmp(key, "heartbeat_interval") == 0) {
+        config->heartbeat_interval_sec = (uint32_t)strtoul(val, NULL, 10);
+    } else if (strcmp(section, "worker") == 0 && strcmp(key, "capabilities") == 0) {
+        strncpy(config->advertised_capabilities, val, CONFIG_STR_MAX - 1);
+    } else if (strcmp(section, "logging") == 0 && strcmp(key, "level") == 0) {
+        strncpy(config->log_level, val, CONFIG_STR_MAX - 1);
+    }
 }
 
-vom_config vom_config_defaults(void) {
-    vom_config config;
-    config.count = 0;
-
-    add_entry(&config, "system", "heartbeat", "1s");
-    add_entry(&config, "logging", "level", "INFO");
-    add_entry(&config, "network", "master_endpoint", "127.0.0.1");
-
-    return config;
+void vom_config_defaults(vom_config_t *out) {
+    if (!out) return;
+    memset(out, 0, sizeof(vom_config_t));
+    strncpy(out->cluster_name, "vom-default-cluster", CONFIG_STR_MAX - 1);
+    strncpy(out->master_endpoint, "tcp://127.0.0.1:5555", CONFIG_STR_MAX - 1);
+    strncpy(out->worker_id, "worker-default", CONFIG_STR_MAX - 1);
+    out->heartbeat_interval_sec = 5;
+    strncpy(out->log_level, "info", CONFIG_STR_MAX - 1);
 }
 
-vom_config vom_config_load(const char *filename) {
-    vom_config config;
-    config.count = 0;
+bool vom_config_load(const char *filename, vom_config_t *out) {
+    if (!filename || !out) return false;
+    vom_config_defaults(out);
+
     FILE *file = fopen(filename, "r");
     if (!file) {
-        return config;
+        return false;
     }
-
-    char line[MAX_LINE_LEN];
+        char line[MAX_LINE_LEN];
     char current_section[MAX_NAME_LEN] = "";
 
     while (fgets(line, sizeof(line), file)) {
@@ -103,9 +107,9 @@ vom_config vom_config_load(const char *filename) {
         *eq = '\0';
         char *k = trim_whitespace(s);
         char *v = trim_whitespace(eq + 1);
-        add_entry(&config, current_section, k, v);
+        set_config_entry(out, current_section, k, v);
     }
 
     fclose(file);
-    return config;
+    return true;
 }

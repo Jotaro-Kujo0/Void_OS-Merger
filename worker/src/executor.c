@@ -3,14 +3,14 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <sys/time.h>
-#include <signal.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <pthread.h>
-
+#include <common/compat.h>
+#ifdef _WIN32
+#include <process.h>   /* Windows: waitpid, _WEXITSTATUS */
+#else
+#include <sys/wait.h>   /* POSIX: waitpid, WEXITSTATUS */
+#endif
 /* --- 1. INTEGRATED EXECUTOR CONFIGURATIONS SPECIFICATIONS ---------------- */
 
 typedef enum {
@@ -149,16 +149,25 @@ static void release_local_resources(const ChunkAssignment *assignment) {
     pthread_mutex_unlock(&g_resource_mutex);
 }
 
+/* Simple FNV-1a based integrity hash (not cryptographic, but deterministic) */
 static void compute_deterministic_integrity(const char *filepath, char *out_sha256) {
+    uint64_t hash1 = 0xcbf29ce484222325ULL;
+    uint64_t hash2 = 0x517cc1b727220a95ULL;
     FILE *f = fopen(filepath, "r");
-    if (!f) {
-        strncpy(out_sha256, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", 64); 
-        out_sha256[64] = '\0';
-        return;
+    if (f) {
+        int ch;
+        while ((ch = fgetc(f)) != EOF) {
+            hash1 ^= (uint8_t)ch;
+            hash1 *= 0x100000001b3ULL;
+            hash2 ^= (uint8_t)ch;
+            hash2 *= 0xcbf29ce484222325ULL;
+        }
+        fclose(f);
     }
-    strncpy(out_sha256, "fa54b38d38f2038749a21e428fb934ceaa71f2534a782b8109bf14a29a00bde3", 64);
+    snprintf(out_sha256, 65, "%016llx%016llx%016llx%016llx",
+             (unsigned long long)hash1, (unsigned long long)hash2,
+             (unsigned long long)(hash1 ^ hash2), (unsigned long long)(hash1 + hash2));
     out_sha256[64] = '\0';
-    fclose(f);
 }
 
 bool vom_executor_run(const ChunkAssignment *assignment, ChunkStatusCallback cb, void *user_data, volatile bool *cancel_flag) {
@@ -216,7 +225,9 @@ bool vom_executor_run(const ChunkAssignment *assignment, ChunkStatusCallback cb,
     }
 
     close(pipe_fd[1]);
+#ifndef _WIN32
     fcntl(pipe_fd[0], F_SETFL, O_NONBLOCK);
+#endif
 
     struct timeval start_time, current_time;
     gettimeofday(&start_time, NULL);

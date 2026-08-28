@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <pthread.h>
+#include <common/compat.h>
 
 /* Independent Mock Logger Macro Implementations */
 #define VOM_LOG_INFO(fmt, ...)  printf("[INFO] " fmt "\n", ##__VA_ARGS__)

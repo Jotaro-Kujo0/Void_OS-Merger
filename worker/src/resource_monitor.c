@@ -3,15 +3,12 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <unistd.h>
-#include <sys/time.h>
-#include <pthread.h>
+#include <common/compat.h>
 
 #define MAX_SAMPLES         10
 #define PROBE_COOLDOWN_MS   2000  
 #define STALE_THRESHOLD_MS  10000 
 
-extern void execute_test_suite(void);
 
 typedef enum {
     SAMPLE_FRESH,
@@ -190,7 +187,9 @@ void execute_monitor_test_suite(void) {
     vom_monitor_destroy(monitor);
 }
 
+#ifdef VOM_STANDALONE_TEST
 int main(void) {
     execute_monitor_test_suite();
     return 0;
 }
+#endif

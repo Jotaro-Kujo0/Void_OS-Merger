@@ -1,9 +1,8 @@
  #ifndef VOM_COMMON_DOMAIN_H
  #define VOM_COMMON_DOMAIN_H
 
- #include <cstdint>
 #include <stdint.h>
- #include <stdbool.h>
+#include <stdbool.h>
 
  #define DOMAIN_UUID_LEN    40
  #define DOMAIN_NAME_MAX    64
@@ -27,15 +26,14 @@
 
  } VomStatus;
 
-//workload layer (durable/seperate macro state)
+//workload layer (durable/separate macro state)
 
 typedef enum {
-    VOM_STAT_ERR_VALIDATION    = 6,
-    VOM_STAT_ERR_UNSUPPORTED   = 7,
-    VOM_STAT_ERR_CAPACITY      = 8,
-    VOM_STAT_ERR_TIMEOUT       = 9,
-    VOM_STAT_ERR_REJECTED      = 10,
-    VOM_STAT_ERR_INTERNAL      = 11
+    VOM_WORKLOAD_STATE_SUBMITTED    = 0,
+    VOM_WORKLOAD_STATE_PLANNING     = 1,
+    VOM_WORKLOAD_STATE_EXECUTING    = 2,
+    VOM_WORKLOAD_STATE_COMPLETED    = 3,
+    VOM_WORKLOAD_STATE_CANCELLED    = 4
 } VomWorkloadState;
 
 typedef struct {
@@ -78,7 +76,6 @@ typedef enum {
     VOM_WORKER_OFFLINE,
     VOM_WORKER_APPROVED,
     VOM_WORKER_HEALTHY,
-    VOM_WORKER_HAELTHY,
     VOM_WORKER_DRAINING,
     VOM_WORKER_DISCONNECTED
 } VomWorkerStatus;

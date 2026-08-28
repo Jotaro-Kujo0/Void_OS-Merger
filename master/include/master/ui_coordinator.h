@@ -23,7 +23,7 @@
  typedef enum {
     UI_ALERT_NONE,
     UI_ALERT_DEGRADED,
-    UI_ALERT_DECORVERING,
+    UI_ALERT_RECOVERING,
     UI_ALERT_FAULT
  } VomUiAlertTier;
 

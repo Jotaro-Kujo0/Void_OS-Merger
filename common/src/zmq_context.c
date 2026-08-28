@@ -1,5 +1,4 @@
-#include <unistd.h>
-#include <pthread.h>
+#include <common/compat.h>
 
 extern void *zmq_ctx_new(void);
 extern int   zmq_ctx_set(void *context, int option, int optval);

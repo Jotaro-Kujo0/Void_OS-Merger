@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <pthread.h>
+#include <common/compat.h>
 
 #define SNAPSHOT_RING_SIZE           4
 #define CLUSTER_MAX_WORKERS          32

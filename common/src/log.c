@@ -2,10 +2,10 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <time.h>
-#include <sys/time.h>
-#include <pthread.h>
 #include <string.h>
+#include <common/compat.h>
 
 /* --- Embedded Interface Enums to Bypass Include Path Failures --- */
 typedef enum {

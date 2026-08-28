@@ -14,16 +14,14 @@
 #include <stdint.h>
 #include <assert.h>
 
-#define DISCORVERY_ENDPOINT_MAX 128
+#define DISCOVERY_ENDPOINT_MAX 128
 
 typedef enum {
-    DISCORVERY_STATUS_IDLE,
+    DISCOVERY_STATUS_IDLE,
     DISCOVERY_STATUS_SEARCHING,
     DISCOVERY_STATUS_FOUND,
     DISCOVERY_STATUS_FALLBACK,
-    DISCOVERY_STATUS_LOST,
-    DISCOVERY_ENDPOINT_MAX,
-    DISCOVERY_STATUS_IDLE
+    DISCOVERY_STATUS_LOST
 } VomDiscoveryStatus;
 
 typedef void (*VomDiscoveryChangeCallback)(const char *new_endpoint, void *user_data);
@@ -142,7 +140,9 @@ void execute_discovery_test_suite(void) {
     vom_worker_discovery_destroy(disc);
 }
 
+#ifdef VOM_STANDALONE_TEST
 int main(void) {
     execute_discovery_test_suite();
     return 0;
 }
+#endif

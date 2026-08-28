@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.16)
 # optional: while it is missing, `vom_proto` is built from an empty stub and
 # the comment-only cluster.capnp schema is not compiled. Install the plugin
 # to get real bindings once the schema is populated.
-find_program(CAPNP_EXECUTABLE capnp REQUIRED)
+find_program(CAPNP_EXECUTABLE capnp)
 find_program(CAPNPC_C_EXECUTABLE NAMES capnpc-c capnp-c)
 
 set(VOM_PROTO_FILES

@@ -3,9 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <unistd.h>
-#include <sys/time.h>
-#include <pthread.h>
+#include <common/compat.h>
 
 #define ROUTER_ID_MAX_LEN       64
 #define ROUTER_PAYLOAD_MAX_LEN  4096
@@ -230,7 +228,9 @@ void execute_router_test_suite(void) {
     vom_master_router_destroy(broker);
 }
 
+#ifdef VOM_STANDALONE_TEST
 int main(void) {
     execute_router_test_suite();
     return 0;
 }
+#endif

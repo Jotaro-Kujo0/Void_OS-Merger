@@ -62,7 +62,9 @@ void execute_cli_test_suite(void) {
     assert(args.heartbeat_interval_ms == 3000);
 }
 
+#ifdef VOM_STANDALONE_TEST
 int main(void) {
     execute_cli_test_suite();
     return 0;
 }
+#endif

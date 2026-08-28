@@ -3,13 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <unistd.h>
-
-#if defined(__linux__) || defined(__ANDROID__)
-#include <sys/sysinfo.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#endif
+#include <common/compat.h>
 
 /* --- Inline Required Architecture Types to Bypass Include Failures --- */
 #define VOM_CPU_FEAT_AVX2    (1 << 0)

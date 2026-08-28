@@ -18,7 +18,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <pthread.h>
+#include <common/compat.h>
 
 #define MAX_ACTIVE_WORKLOADS    32
 #define MAX_CHUNKS_PER_JOB  64
@@ -170,13 +170,21 @@ static void recalculate_job_progress(ActiveWorkloadLifecycle* job) {
         if (job->chunks[i].state == CHK_STATE_FAILED) failed++;
     }
     
-    job->overall_progress = (float)completed / (float)job->chunk_count;
+    job->overall_progress = (job->chunk_count > 0) ? ((float)completed / (float)job->chunk_count) : 0.0f;
     
     if (failed > 0) {
         job->state = WL_STATE_FAILED;
     } else if (completed == job->chunk_count) {
         job->state = WL_STATE_COMPLETED;
-        strncpy(job->aggregated_result_hash, "sha256-agg-b838cd7e21a4f009bde14f", SHORT_STR_LEN - 1);
+        /* Compute real aggregated hash from chunk checksums */
+        uint64_t h = 0xcbf29ce484222325ULL;
+        for (int i = 0; i < job->chunk_count; i++) {
+            for (const char *p = job->chunks[i].output_checksum; *p; p++) {
+                h ^= (uint8_t)*p;
+                h *= 0x100000001b3ULL;
+            }
+        }
+        snprintf(job->aggregated_result_hash, SHORT_STR_LEN, "sha256-%016llx", (unsigned long long)h);
     }
 }
 

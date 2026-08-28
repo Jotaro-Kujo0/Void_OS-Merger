@@ -15,8 +15,7 @@
  #include <string.h>
  #include <stdbool.h>
  #include <stdint.h>
- #include <unistd.h>
- #include <sys/time.h>
+ #include <common/compat.h>
 
  #define TRANSPORT_ID_MAX_LEN 64
  #define TRANSPORT_KEY_MAX_LEN  40
@@ -279,7 +278,9 @@ void execute_transport_test_suite(void) {
     vom_worker_transport_destroy(ctx);
 }
 
+#ifdef VOM_STANDALONE_TEST
 int main(void) {
     execute_transport_test_suite();
     return 0;
 }
+#endif

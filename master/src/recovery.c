@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <pthread.h>
+#include <common/compat.h>
 
 #define REC_MAX_WORKERS      64
 #define REC_MAX_LEASES       128
@@ -245,6 +245,7 @@ void vom_recovery_publish_ui_dashboard(vom_recovery_context_t* ctx) {
 /* --- COMPLETE SYSTEM TEST RUNNER HARNESS -------------------------------- */
 /* ========================================================================= */
 
+#ifdef VOM_STANDALONE_TEST
 int main(void) {
     printf(" -- INITIALIZING WORKER LOSS RECOVERY ENGINE TESTS --\n\n");
     vom_recovery_context_t* engine = vom_recovery_init();
@@ -256,4 +257,9 @@ int main(void) {
     vom_recovery_inject_test_lease(engine, 7001, 501, "worker-tablet-01", simulated_clock_ms + 5000, VOM_RETRY_IMMEDIATE);
     
     /* Scenario 2: Simulate complete worker transport loss via heartbeat timeout */
+    vom_recovery_sweep_timeouts(engine, simulated_clock_ms + 15000, 5000);
+    vom_recovery_publish_ui_dashboard(engine);
+    vom_recovery_destroy(engine);
+    return 0;
 }
+#endif

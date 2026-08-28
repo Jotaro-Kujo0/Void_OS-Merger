@@ -12,12 +12,15 @@ set(VOM_SUBPROJECTS
 
 project(void_os_merger C CXX)
 
-set(VOM_WARN_FLAGS
-    -Wall -Wextra -Wpedantic
-    -Wno-unused-parameter
-)
+if(MSVC)
+    set(VOM_WARN_FLAGS /W4 /wd4100)
+else()
+    set(VOM_WARN_FLAGS -Wall -Wextra -Wpedantic -Wno-unused-parameter)
+endif()
 set(VOM_C_FLAGS   "${VOM_WARN_FLAGS}")
 set(VOM_CXX_FLAGS "${VOM_WARN_FLAGS}")
+
+find_package(Threads)
 
 include_directories(${CMAKE_SOURCE_DIR})
 

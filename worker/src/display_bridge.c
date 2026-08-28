@@ -185,7 +185,9 @@ void execute_display_bridge_test_suite(void) {
     vom_display_bridge_destroy(bridge);
 }
 
+#ifdef VOM_STANDALONE_TEST
 int main(void) {
     execute_display_bridge_test_suite();
     return 0;
 }
+#endif

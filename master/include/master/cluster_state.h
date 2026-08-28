@@ -129,7 +129,7 @@ typedef struct {
 ClusterStateContext* cluster_state_create(const char* cluster_uuid, uint64_t initial_epoch);
 
 //shuts down tracking loops
-void clusyter_state_destroy(ClusterStateContext* ctx);
+void cluster_state_destroy(ClusterStateContext* ctx);
 bool cluster_state_persist_to_wal(ClusterStateContext* ctx, const char* wal_journal_path);
 //this part is to restore state structures from disk
 bool cluster_state_recover_from_wal(ClusterStateContext* ctx, const char* wal_journal_path);
