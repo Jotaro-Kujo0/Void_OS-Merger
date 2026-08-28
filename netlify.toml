@@ -1,3 +1,4 @@
 [build]
   publish = "webui"
   functions = "netlify/functions"
+  command = "echo 'deploying static site'"
